@@ -1,0 +1,9 @@
+fastapi
+uvicorn
+langgraph
+langchain
+python-dotenv
+langchain_openai
+psycopg2-binary
+asyncpg
+langgraph-checkpoint-postgres
