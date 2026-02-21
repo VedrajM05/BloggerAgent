@@ -1,1 +1,58 @@
-/.vscode
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[codz]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+bin/
+build/
+develop-eggs/
+dist/
+eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+.tox/
+.coverage
+.cache
+nosetests.xml
+coverage.xml
+htmlcov/
+.rpt2_cache/
+.pytest_cache/
+
+# Environment files
+.env
+.venv
+venv/
+env/
+ENV/
+
+# Editors and IDEs
+.vscode/
+.idea/
+*.swp
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints
+
+# OS-generated files
+.DS_Store
+.directory
+
+# Python specific logs
+*.log
