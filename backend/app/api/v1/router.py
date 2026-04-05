@@ -1,7 +1,7 @@
 from fastapi import APIRouter
-from app.schemas.Blog import BlogRequest, BlogResponse
-from app.api.v1 import health
-from app.agents.agents import run_blog_writer
+from schemas.Blog import BlogRequest, BlogResponse
+from api.v1 import health
+from agents.agents import run_blog_writer
 import uuid
 
 api_router = APIRouter()
@@ -13,4 +13,7 @@ def generate_blog(req : BlogRequest):
     correlationId = str(uuid.uuid4())
     result =  run_blog_writer(req.topic, correlationId = correlationId)
 
-    return BlogResponse(final= result["final"])
+    return BlogResponse(
+        final= result["final"],
+        published_url = result.get("published_url")
+        )

@@ -1,3 +1,5 @@
+from typing import Optional
+
 from pydantic import BaseModel
 
 class BlogRequest(BaseModel):
@@ -7,3 +9,4 @@ class BlogRequest(BaseModel):
     
 class BlogResponse(BaseModel):
     final: str
+    published_url : Optional[str] = None

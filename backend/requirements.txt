@@ -7,3 +7,5 @@ langchain_openai
 psycopg2-binary
 asyncpg
 langgraph-checkpoint-postgres
+huggingface_hub
+langsmith

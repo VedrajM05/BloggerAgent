@@ -1,0 +1,14 @@
+<h2>Blogger Agent</h2>
+
+<form [formGroup] = "blogGeneratorform" (ngSubmit)="generateBlog()">
+    <input formControlName = "topic" placeholder="Enter blog topic">
+    <button type="submit">Generate</button>
+</form>
+
+<br>
+
+<div *ngIf = "loading">Generating blog...</div>
+
+<hr/>
+
+<div [innerHTML]="blogContent"></div>

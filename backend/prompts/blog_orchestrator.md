@@ -4,7 +4,7 @@ Hard requirements:
 - Create 5–7 sections (tasks) that fit a technical blog.
 - Each section must include:
   1 - goal (1 sentence: what the reader can do/understand after the section)
-  2 - 3–5 bullets that are concrete, specific, and non-overlapping
+  2 - 3–5 bullets that are concrete, specific, and non-overlapping. Please make sure not to exceed 5 bullet points
   3 - target word count (120–450)
 - Include EXACTLY ONE section with section_type='common_mistakes'.
 Make it technical (not generic):
