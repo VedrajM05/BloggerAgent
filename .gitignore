@@ -56,3 +56,24 @@ ENV/
 
 # Python specific logs
 *.log
+
+
+# Generated Blog markdown files
+*.md
+/.vs/BlogWriterAgent/v17
+/.vs/slnx.sqlite
+/.vs/slnx.sqlite-journal
+/.vs/VSWorkspaceState.json
+/.vs/BlogWriterAgent/FileContentIndex
+/backend/.vs/backend/CopilotIndices/17.14.878.3237
+/backend/.vs/backend/FileContentIndex
+/backend/.vs/backend/v17
+/backend/.vs/slnx.sqlite
+/backend/.vs/VSWorkspaceState.json
+/backend/outputs
+/.vs/BlogWriterAgent/CopilotIndices/17.14.878.3237/CodeChunks.db
+/.vs/BlogWriterAgent/CopilotIndices/17.14.878.3237/CodeChunks.db-shm
+/.vs/BlogWriterAgent/CopilotIndices/17.14.878.3237/CodeChunks.db-wal
+/.vs/BlogWriterAgent/CopilotIndices/17.14.878.3237/SemanticSymbols.db
+/.vs/BlogWriterAgent/CopilotIndices/17.14.878.3237/SemanticSymbols.db-shm
+/.vs/BlogWriterAgent/CopilotIndices/17.14.878.3237/SemanticSymbols.db-wal
