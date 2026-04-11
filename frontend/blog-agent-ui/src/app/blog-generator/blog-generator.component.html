@@ -1,14 +1,57 @@
-<h2>Blogger Agent</h2>
+<div class="h-screen bg-black text-white flex flex-col">
 
-<form [formGroup] = "blogGeneratorform" (ngSubmit)="generateBlog()">
-    <input formControlName = "topic" placeholder="Enter blog topic">
-    <button type="submit">Generate</button>
-</form>
+    <!-- Header -->
+    <div class="p-4 border-b border-gray-800 text-xl flex justify-center font-semibold w-96">
+        Blogger Agent
+    </div>
 
-<br>
 
-<div *ngIf = "loading">Generating blog...</div>
+    <div *ngIf="currentTopic" class="mb-4 text-gray-400 text-sm">
+        <span class="text-gray-500">Topic:</span>
+        <span class="ml-2 text-white font-medium">{{ currentTopic }}</span>
+    </div>
 
-<hr/>
+    <!-- Blog Content -->
+    <div class="flex-1 overflow-y-auto px-6 py-6 flex justify-center">
+        <div class="max-w-3xl w-full bg-gray-900 border border-gray-800 rounded-lg p-6 shadow-lg">
+            <!-- Copy Button Logic -->
+            <div class="flex justify-end mb-4" *ngIf="blogContent">
+                <button (click)="copyToClipboard()" class="p-2 rounded hover:bg-gray-800 transition" title="Copy">
+                    <!-- Heroicons Copy Icon -->
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-300" fill="none"
+                        viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16h8m-8-4h8m2 8H6a2 2 0 01-2-2V6
+               a2 2 0 012-2h8a2 2 0 012 2v12z" />
+                    </svg>
+                </button>
+            </div>
+            <div *ngIf="loading" class="text-center text-gray-400 animate-pulse">
+                Generating blog...
+            </div>
+            <div *ngIf="!loading && blogContent" class="prose prose-invert max-w-none" [innerHTML]="blogContent">
+            </div>
+        </div>
+    </div>
 
-<div [innerHTML]="blogContent"></div>
+    <!-- Published URL -->
+    <div *ngIf="showPublishBadge" class="mt-4 p-3 bg-green-900 rounded border border-green-700 animate-fadeIn">
+        <p class="text-green-300 text-sm">Published Successfully 🚀</p>
+        <a [href]="publishedUrl" target="_blank" class="text-green-200 underline break-all">
+            {{ displayedPublishUrl }}
+        </a>
+    </div>
+
+
+    <!-- Bottom Input (Chat Style) -->
+    <div class="p-4 border-t border-gray-800 flex justify-center">
+        <form [formGroup]="blogGeneratorform" (ngSubmit)="generateBlog()" class="flex gap-2 w-full max-w-3xl">
+            <input formControlName="topic" placeholder="Enter topic..."
+                class="flex-1 p-3 rounded bg-gray-900 border border-gray-700 w-96" />
+            <button type="submit"
+                class="bg-white text-black px-4 py-2 rounded font-medium hover:bg-gray-300 transition">
+                Generate
+            </button>
+        </form>
+    </div>
+
+</div>
