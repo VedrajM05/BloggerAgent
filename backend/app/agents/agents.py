@@ -14,6 +14,7 @@ from dotenv import load_dotenv
 from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
 from huggingface_hub import InferenceClient
 import requests
+from helpers.ollama_helper import call_ollama, parse_structured_output
 from schemas.Plan import Plan
 from schemas.State import SearchResult, State, TavilyResponse
 from core.logger import AgentLogger
@@ -35,8 +36,10 @@ dotenv.load_dotenv()
 
 TAVILY_API_KEY  = os.getenv("TAVILY_API_KEY")
 
-llm = ChatOpenAI()
+# llm = ChatOpenAI()
 # llm = InferenceClient(model=deepseek_r1)
+
+
 
 def tavily_search_node(state : State) -> dict:
     topic = state["topic"]
@@ -46,7 +49,7 @@ def tavily_search_node(state : State) -> dict:
     
     # If no search results found
     if not search_results:
-        print("No such results")
+        #print("No such results")
         return {"research_content" : search_results}
     # print(search_results['results'])
     # top_results = results["results"][:2]
@@ -58,9 +61,9 @@ def tavily_search_node(state : State) -> dict:
         results = [
             SearchResult(
                 title = r.get("title"),
-                url = r.get("url"),
                 content = r.get("content"),
-                score = r.get("score"),
+                # url = r.get("url"),
+                # score = r.get("score"),
             )
             for r in search_results.get('results')
         ],
@@ -76,7 +79,7 @@ def tavily_search_node(state : State) -> dict:
     #     agent_logger.log_state("title", res.title)
     #     agent_logger.log_state("score", res.score)
     #     agent_logger.log_state("content", res.content)
-   
+    print(f"tavily_response.results : \n",tavily_response.results)
     return {"research_content" : tavily_response.results}
 
 
@@ -85,9 +88,13 @@ def orchestrator(state : State) -> dict:
     formatted_prompt = orchestrator_prompt.format(
         topic = state["topic"]
     )
+    print("formatted_prompt  completed")
     #agent_logger.log_prompt(node_name="orchestrator", correlationId= state.get("correlationId"), prompt=formatted_prompt)
-    plan = llm.with_structured_output(Plan).invoke(formatted_prompt)
-    
+    #plan = llm.with_structured_output(Plan).invoke(formatted_prompt)
+    raw_output = call_ollama(formatted_prompt)
+    print("call ollama  completed")
+    plan = parse_structured_output(raw_output, Plan)
+    print("parse_structured_output completed : ",plan)
     return {"plan" : plan}
 
 def fanout(state : State):
@@ -133,9 +140,9 @@ def worker(payload : dict) -> dict:
     
     # log_prompt creating too much prompts in log file
     #agent_logger.log_prompt(node_name="worker", correlationId= correlationId, prompt=formatted_prompt)
-    
-    section_md = llm.invoke(formatted_prompt).content.strip()
-    
+    #raw_output = call_ollama(formatted_prompt)
+    section_md = call_ollama(formatted_prompt) #llm.invoke(formatted_prompt).content.strip()
+    print("sections : ",section_md)
     return{"sections" : [section_md]}
 
 def reducer(state : State) -> dict:
@@ -150,7 +157,7 @@ def reducer(state : State) -> dict:
     output_dir = Path("outputs")
     output_dir.mkdir(parents=True, exist_ok= True)
     output_path = output_dir/filename
-    print(output_path)
+    #print(output_path)
     output_path.write_text(final_markdown, encoding="utf-8")
 
     return {"final" : final_markdown}
@@ -160,7 +167,7 @@ def publish_to_devto_node(state : State) -> dict:
     api_key = os.getenv("DEVTO_API_KEY")
 
     if not api_key:
-        print("Dev.to API key missing")
+        #print("Dev.to API key missing")
         return {"published_url":""}
 
     final_blog=state["final"]
@@ -189,38 +196,42 @@ def publish_to_devto_node(state : State) -> dict:
         response = requests.post(url=url, json=payload, headers=headers)
         
         if response.status_code != 201:
-            print("Dev.to publishing failed")
+            #print("Dev.to publishing failed")
             return {"published_url":""}
         
         data = response.json()
 
         article_url = data.get("url","")
 
-        print("Published URL : ", article_url)
+        #print("Published URL : ", article_url)
 
         return {"published_url": article_url}
     
     except Exception as e:
-        print("Publish error : ", str(e))
+        #print("Publish error : ", str(e))
         return {"published_url":""}
 
 
 
 g = StateGraph(State)
+g.add_node("tavily_search_node", tavily_search_node)
 g.add_node("orchestrator", orchestrator)
 g.add_node("worker", worker)
 g.add_node("reducer", reducer)
-g.add_node("tavily_search_node", tavily_search_node)
-g.add_node("publish_to_devto_node", publish_to_devto_node)
+# g.add_node("publish_to_devto_node", publish_to_devto_node)
 
-g.add_edge(START, "orchestrator")
+g.add_edge(START, "tavily_search_node")
+g.add_edge("tavily_search_node", "orchestrator")
 g.add_conditional_edges("orchestrator", fanout, ["worker"])
 g.add_edge("worker", "reducer")
-g.add_edge("reducer", "tavily_search_node")
-g.add_edge("tavily_search_node","publish_to_devto_node")
-g.add_edge("publish_to_devto_node", END)
-g.set_finish_point("publish_to_devto_node")
 
+g.set_finish_point("reducer")
+
+# g.add_edge("worker", "reducer")
+# g.add_edge("reducer", "tavily_search_node")
+# g.add_edge("tavily_search_node","publish_to_devto_node")
+# g.add_edge("publish_to_devto_node", END)
+# g.set_finish_point("publish_to_devto_node")
 
 workflow = g.compile()
 
@@ -237,7 +248,7 @@ def run_blog_writer(topic : str, correlationId : str):
 
 
 async def tavily_search(topic : str):
-    print("tavily_search method invoked")
+    #print("tavily_search method invoked")
     url = "https://api.tavily.com/search"
     payload = {
         "api_key" : TAVILY_API_KEY,

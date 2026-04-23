@@ -14,6 +14,9 @@ def generate_blog(req : BlogRequest):
     result =  run_blog_writer(req.topic, correlationId = correlationId)
 
     return BlogResponse(
-        final= result["final"],
-        published_url = result.get("published_url")
+        plan= result["plan"],
+        sections=result["sections"]
+        # revert these changes later
+        # final= result["final"],
+        # published_url = result.get("published_url")
         )

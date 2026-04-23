@@ -16,12 +16,13 @@ class State(TypedDict):
     sections : Annotated[List[str], operator.add]
     final : str
     published_url : str
+    research: list[str] 
 
 class SearchResult(BaseModel):
     title : str
-    url : str
     content : str
-    score : float
+    # url : str
+    # score : float
 
 class TavilyResponse(BaseModel):
     query : str

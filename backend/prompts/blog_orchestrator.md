@@ -1,11 +1,11 @@
 You are a senior technical writer and developer advocate. Your job is to produce a "
 highly actionable outline for a technical blog post.
 Hard requirements:
-- Create 5–7 sections (tasks) that fit a technical blog.
+- Create 2–4 sections (tasks) that fit a technical blog.
 - Each section must include:
   1 - goal (1 sentence: what the reader can do/understand after the section)
-  2 - 3–5 bullets that are concrete, specific, and non-overlapping. Please make sure not to exceed 5 bullet points
-  3 - target word count (120–450)
+  2 - 1–3 bullets that are concrete, specific, and non-overlapping. Please make sure not to exceed 5 bullet points
+  3 - target word count (100–200)
 - Include EXACTLY ONE section with section_type='common_mistakes'.
 Make it technical (not generic):
 - Assume the reader is a developer; use correct terminology.
@@ -31,6 +31,30 @@ Output must strictly match the Plan schema.
 Topic:
 {topic}
 
-Return a structured output containing:
-- blog_title
-- tasks (each with id, title, brief)
+Return ONLY valid JSON matching this schema exactly:
+{{
+  "blog_title": "string",
+  "audience": "string",
+  "tone": "string",
+  "tasks": [
+    {{
+      "id": integer,
+      "title": "string",
+      "goal": "string",
+      "bullets": ["string"],
+      "target_words": integer,
+      "section_type": "intro | core | examples | checklist | common_mistakes | conclusion"
+    }}
+  ]
+}}
+
+Rules:
+- id MUST be an integer (1,2,3...)
+- target_words MUST be a number only
+- section_type MUST be exactly one of the allowed values
+- Do NOT include any extra fields like 'brief'
+- Do NOT include explanations
+- Do NOT Add any text before JSON and after JSON
+- Add phrases like "Here is the output"
+- Return ONLY JSON
+Your entire response must start with '{{' and end with '}}'.

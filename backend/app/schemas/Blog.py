@@ -1,6 +1,7 @@
-from typing import Optional
+from typing import List, Optional
 
 from pydantic import BaseModel
+from schemas.Plan import Plan
 
 class BlogRequest(BaseModel):
     topic: str
@@ -8,5 +9,8 @@ class BlogRequest(BaseModel):
 
     
 class BlogResponse(BaseModel):
-    final: str
-    published_url : Optional[str] = None
+    plan : Plan
+    sections : List[str]
+    # revert this changes later
+    # final: str
+    # published_url : Optional[str] = None
