@@ -1,7 +1,9 @@
 from typing import List, Optional
+from typing import Optional
 
 from pydantic import BaseModel
 from schemas.Plan import Plan
+from schemas.ProgressEvent import ProgressEvent
 
 class BlogRequest(BaseModel):
     topic: str
@@ -9,8 +11,7 @@ class BlogRequest(BaseModel):
 
     
 class BlogResponse(BaseModel):
-    plan : Plan
-    sections : List[str]
-    # revert this changes later
-    # final: str
-    # published_url : Optional[str] = None
+    topic: str
+    final: str
+    plan: Optional[Plan] = None
+    events: list[ProgressEvent]

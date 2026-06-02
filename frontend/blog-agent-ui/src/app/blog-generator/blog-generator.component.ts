@@ -1,180 +1,233 @@
-import { HttpClient } from '@angular/common/http';
-import { ChangeDetectionStrategy, ChangeDetectorRef, Component, ElementRef, OnInit, ViewChild } from '@angular/core';
+import { Component, OnDestroy } from '@angular/core';
 import { FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { marked } from 'marked';
+import { BlogPlan, BlogService, PlanTask, ProgressEvent } from './blog.service';
 
 @Component({
   selector: 'app-blog-generator',
   templateUrl: './blog-generator.component.html',
   styleUrls: ['./blog-generator.component.scss']
 })
-export class BlogGeneratorComponent implements OnInit {
+export class BlogGeneratorComponent implements OnDestroy {
+  readonly blogGeneratorform: FormGroup;
+  readonly loadingMessages = [
+    'Research Agent working...',
+    'Research Analyst extracting insights...',
+    'Planning Agent preparing tasks...',
+    'Writer Agents generating content...',
+    'Editor Agent assembling the final article...'
+  ];
 
-  blogGeneratorform: FormGroup;
   loading = false;
+  currentTopic = '';
+  plan: BlogPlan | null = null;
+  events: ProgressEvent[] = [];
+  visibleEvents: ProgressEvent[] = [];
   blogContentRaw = '';
   blogContent = '';
-  publishedUrl = 'https://dev.to/vedraj_mokashi/exploring-rag-embedding-techniques-in-depth-1005';
+  errorMessage = '';
+  copyLabel = 'Copy markdown';
   isStreamingComplete = false;
-  currentTopic = '';
-  showPublishBadge = false;
-  displayedPublishUrl = '';
-  // @ViewChild('scrollContainer') scrollContainer!: ElementRef
+  traceComplete = false;
+  loadingStep = 0;
 
-  constructor(private fb: FormBuilder, private http: HttpClient) {
+  private loadingTimer?: number;
+  private streamTimers: number[] = [];
+  private eventTimers: number[] = [];
 
+  constructor(
+    private fb: FormBuilder,
+    private blogService: BlogService
+  ) {
     this.blogGeneratorform = this.fb.group({
       topic: ['', [Validators.required, Validators.pattern(/\S+/)]]
-    })
-  }
-
-
-  ngOnInit(): void {
-    this.readStaticFile();
-  }
-
-  generateBlog() {
-    console.log("Blog generator called...");
-
-    if (this.blogGeneratorform.invalid) {
-      return;
-    }
-
-    this.loading = true;
-    const topic = this.blogGeneratorform.value.topic;
-    console.log(topic);
-    this.currentTopic = this.blogGeneratorform.value.topic;
-    this.http.post<any>('http://127.0.0.1:8000/api/v1/generate-blog', { topic })
-      .subscribe({
-        next: (res) => {
-          this.blogContentRaw = res.final;
-          this.streamBlog(res.final)
-          this.loading = false;
-          console.log(this.blogContent);
-        },
-        error: () => {
-          this.loading = false;
-        }
-      })
-  }
-
-  readStaticFile() {
-    this.http.get("assets/exploring the uses of langsmith in 2026.md", { responseType: 'text' })
-      .subscribe({
-        next: (res) => {
-          // this.blogContent = marked.parse(res) as string;
-          this.blogContentRaw = res;
-          this.streamBlog(res)
-          //console.log(data);
-
-        }
-      })
-  }
-
-  streamBlog(content: string) {
-
-    this.showPublishBadge = false;
-    this.displayedPublishUrl = '';
-
-    // Split content into words, "Hello world from Angular" ==> ["Hello", "world", "from", "Angular"]
-    const words = content.split(" ");
-
-    let current = "";
-    this.blogContent = "";
-    this.isStreamingComplete = false;
-
-    words.forEach((word, index) => {
-      // Delay each word using setTimeout
-      setTimeout(() => {
-
-        //Delay each word using setTimeout, Keeps adding words one by one
-        current += word + " ";
-
-        //Convert to HTML using markdown
-        this.blogContent = marked.parse(current) as string;
-
-        //Force DOM Update
-        //this.cdr.detectChanges();
-
-
-        //calling auto scroll logic
-        //this.scrollToBottom();
-
-        if (index === words.length - 1) {
-          this.isStreamingComplete = true
-          if (this.publishedUrl) {
-            this.streamPublishBadge(); //  NOW THIS EXISTS
-          }
-        }
-
-      }, index * 10); // speed control
     });
   }
 
-  copyToClipboard() {
+  get activeLoadingMessage(): string {
+    return this.loadingMessages[Math.min(this.loadingStep, this.loadingMessages.length - 1)];
+  }
+
+  get planTasks(): PlanTask[] {
+    return this.plan?.tasks ?? [];
+  }
+
+  get activeEventIndex(): number {
+    return this.traceComplete ? -1 : this.visibleEvents.length - 1;
+  }
+
+  generateBlog(): void {
+    if (this.blogGeneratorform.invalid) {
+      this.blogGeneratorform.markAllAsTouched();
+      return;
+    }
+
+    const topic = this.blogGeneratorform.value.topic.trim();
+    this.resetGeneration(topic);
+    this.loading = true;
+    this.startLoadingProgress();
+
+    this.blogService.generateBlog(topic).subscribe({
+      next: (response) => {
+        this.stopLoadingProgress();
+        this.currentTopic = response.topic;
+        this.plan = response.plan;
+        this.events = response.events ?? [];
+        this.loading = false;
+        this.revealEvents(this.events);
+        this.streamBlog(response.final);
+      },
+      error: () => {
+        this.stopLoadingProgress();
+        this.loading = false;
+        this.errorMessage = 'The workflow could not complete. Check that the backend is running and try again.';
+      }
+    });
+  }
+
+  copyToClipboard(): void {
+    if (!this.blogContentRaw) {
+      return;
+    }
+
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(this.blogContentRaw).then(() => this.showCopySuccess());
+      return;
+    }
+
     const temp = document.createElement('textarea');
-    temp.value = this.blogContentRaw; // IMPORTANT: store raw markdown separately
+    temp.value = this.blogContentRaw;
     document.body.appendChild(temp);
     temp.select();
     document.execCommand('copy');
     document.body.removeChild(temp);
-
-    alert("Copied to clipboard!");
+    this.showCopySuccess();
   }
 
-  streamPublishBadge() {
-    this.showPublishBadge = true;
+  downloadMarkdown(): void {
+    if (!this.blogContentRaw) {
+      return;
+    }
 
-    const url = this.publishedUrl;
+    const blob = new Blob([this.blogContentRaw], { type: 'text/markdown;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${this.slugify(this.currentTopic) || 'generated-blog'}.md`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
+  trackByTaskId(_: number, task: PlanTask): number {
+    return task.id;
+  }
+
+  trackByEventIndex(index: number): number {
+    return index;
+  }
+
+  ngOnDestroy(): void {
+    this.stopLoadingProgress();
+    this.clearStreamTimers();
+    this.clearEventTimers();
+  }
+
+  private resetGeneration(topic: string): void {
+    this.stopLoadingProgress();
+    this.clearStreamTimers();
+    this.clearEventTimers();
+    this.currentTopic = topic;
+    this.plan = null;
+    this.events = [];
+    this.visibleEvents = [];
+    this.blogContentRaw = '';
+    this.blogContent = '';
+    this.errorMessage = '';
+    this.copyLabel = 'Copy markdown';
+    this.isStreamingComplete = false;
+    this.traceComplete = false;
+    this.loadingStep = 0;
+  }
+
+  private startLoadingProgress(): void {
+    this.loadingTimer = window.setInterval(() => {
+      if (this.loadingStep < this.loadingMessages.length - 1) {
+        this.loadingStep += 1;
+      }
+    }, 1400);
+  }
+
+  private stopLoadingProgress(): void {
+    if (this.loadingTimer !== undefined) {
+      window.clearInterval(this.loadingTimer);
+      this.loadingTimer = undefined;
+    }
+  }
+
+  private streamBlog(content: string): void {
+    this.clearStreamTimers();
+    this.blogContentRaw = content;
+    const words = content.split(' ');
     let current = '';
 
-    const chars = url.split('');
-
-    chars.forEach((char, index) => {
-      setTimeout(() => {
-        current += char;
-        this.displayedPublishUrl = current;
-      }, index * 15); // speed of URL typing
+    words.forEach((word, index) => {
+      const timer = window.setTimeout(() => {
+        current += `${word} `;
+        this.blogContent = marked.parse(current) as string;
+        if (index === words.length - 1) {
+          this.isStreamingComplete = true;
+        }
+      }, index * 5);
+      this.streamTimers.push(timer);
     });
   }
 
-  // scrollToBottom() {
-  //   try {
-  //     const element = this.scrollContainer.nativeElement;
+  private clearStreamTimers(): void {
+    this.streamTimers.forEach((timer) => window.clearTimeout(timer));
+    this.streamTimers = [];
+  }
 
-  //     // DEBUG LOG HERE
-  //     console.log("scrollHeight:", element.scrollHeight);
-  //     console.log("scrollTop:", element.scrollTop);
+  private revealEvents(events: ProgressEvent[]): void {
+    this.clearEventTimers();
+    this.visibleEvents = [];
+    this.traceComplete = false;
 
-  //     element.scrollTo({
-  //       top: element.scrollHeight,
-  //       behavior: 'auto'
-  //     });
-  //   }
-  //   catch (err) {
-  //     console.error();
-  //   }
-  // }
+    events.forEach((event, index) => {
+      const timer = window.setTimeout(() => {
+        this.visibleEvents = [...this.visibleEvents, event];
+        if (index === events.length - 1) {
+          const completeTimer = window.setTimeout(() => {
+            this.traceComplete = true;
+          }, 700);
+          this.eventTimers.push(completeTimer);
+        }
+      }, index * 650);
+      this.eventTimers.push(timer);
+    });
 
+    if (!events.length) {
+      this.traceComplete = true;
+    }
+  }
 
-  // =========================== Validations ===========================
+  private clearEventTimers(): void {
+    this.eventTimers.forEach((timer) => window.clearTimeout(timer));
+    this.eventTimers = [];
+  }
 
-  // getTopicControl(){
-  //   //console.log(this.blogGeneratorform.get('topic'));
-  //   return this.blogGeneratorform.get('topic');
-  // }
+  private showCopySuccess(): void {
+    this.copyLabel = 'Copied';
+    window.setTimeout(() => {
+      this.copyLabel = 'Copy markdown';
+    }, 1600);
+  }
 
-  // isTopicInvalid() : boolean{
-  //   debugger;
-  //   const control = this.getTopicControl();
-  //   console.log("input is : ",control?.value);
-
-  //   if(control?.value == '' || control?.value == null){
-  //     return true; 
-  //   }
-  //   else{
-  //     return false;
-  //   }
-  // }
+  private slugify(value: string): string {
+    return value
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/(^-|-$)/g, '');
+  }
 
 }

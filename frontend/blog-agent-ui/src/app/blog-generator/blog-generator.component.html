@@ -1,57 +1,130 @@
-<div class="h-screen bg-black text-white flex flex-col">
+<div class="agentic-page">
+  <div class="ambient ambient-one"></div>
+  <div class="ambient ambient-two"></div>
 
-    <!-- Header -->
-    <div class="p-4 border-b border-gray-800 text-xl flex justify-center font-semibold w-96">
-        Blogger Agent
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-mark">
+        <span></span>
+        <span></span>
+        <span></span>
+      </div>
+      <div>
+        <p class="brand-name">Agentic AI Blog Writer</p>
+        <p class="brand-caption">LangGraph writing system</p>
+      </div>
     </div>
-
-
-    <div *ngIf="currentTopic" class="mb-4 text-gray-400 text-sm">
-        <span class="text-gray-500">Topic:</span>
-        <span class="ml-2 text-white font-medium">{{ currentTopic }}</span>
+    <div class="system-status">
+      <span class="status-dot"></span>
+      Multi-agent system online
     </div>
+  </header>
 
-    <!-- Blog Content -->
-    <div class="flex-1 overflow-y-auto px-6 py-6 flex justify-center">
-        <div class="max-w-3xl w-full bg-gray-900 border border-gray-800 rounded-lg p-6 shadow-lg">
-            <!-- Copy Button Logic -->
-            <div class="flex justify-end mb-4" *ngIf="blogContent">
-                <button (click)="copyToClipboard()" class="p-2 rounded hover:bg-gray-800 transition" title="Copy">
-                    <!-- Heroicons Copy Icon -->
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-300" fill="none"
-                        viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16h8m-8-4h8m2 8H6a2 2 0 01-2-2V6
-               a2 2 0 012-2h8a2 2 0 012 2v12z" />
-                    </svg>
-                </button>
-            </div>
-            <div *ngIf="loading" class="text-center text-gray-400 animate-pulse">
-                Generating blog...
-            </div>
-            <div *ngIf="!loading && blogContent" class="prose prose-invert max-w-none" [innerHTML]="blogContent">
-            </div>
+  <main class="conversation-shell">
+    <section class="hero">
+      <!-- <p class="eyebrow">Agentic writing workspace</p>
+      <h1>Watch a research team turn your topic into a finished article.</h1>
+      <p class="hero-copy">One prompt. A visible chain of thought-out work. A polished markdown draft.</p> -->
+
+      <form [formGroup]="blogGeneratorform" (ngSubmit)="generateBlog()" class="topic-form">
+        <label for="topic">What should the agents write about?</label>
+        <div class="input-row">
+          <input id="topic" formControlName="topic" placeholder="Enter a technical topic" autocomplete="off" />
+          <button type="submit" [disabled]="loading">
+            <span *ngIf="!loading">Generate Blog</span>
+            <span *ngIf="loading" class="button-loading"><i></i> Running agents</span>
+          </button>
         </div>
-    </div>
+        <p class="validation-message" *ngIf="blogGeneratorform.get('topic')?.touched && blogGeneratorform.get('topic')?.invalid">
+          Enter a topic to start the agent workflow.
+        </p>
+      </form>
+    </section>
 
-    <!-- Published URL -->
-    <div *ngIf="showPublishBadge" class="mt-4 p-3 bg-green-900 rounded border border-green-700 animate-fadeIn">
-        <p class="text-green-300 text-sm">Published Successfully 🚀</p>
-        <a [href]="publishedUrl" target="_blank" class="text-green-200 underline break-all">
-            {{ displayedPublishUrl }}
-        </a>
-    </div>
+    <section class="current-run" *ngIf="loading || currentTopic || errorMessage">
+      <div class="run-heading">
+        <div>
+          <p class="eyebrow">Current Run</p>
+          <h2>{{ currentTopic }}</h2>
+        </div>
+        <span class="run-state" *ngIf="loading"><i></i> Thinking</span>
+      </div>
 
+      <p class="loading-message" *ngIf="loading"><i></i>{{ activeLoadingMessage }}</p>
+      <p class="error-message" *ngIf="errorMessage">{{ errorMessage }}</p>
 
-    <!-- Bottom Input (Chat Style) -->
-    <div class="p-4 border-t border-gray-800 flex justify-center">
-        <form [formGroup]="blogGeneratorform" (ngSubmit)="generateBlog()" class="flex gap-2 w-full max-w-3xl">
-            <input formControlName="topic" placeholder="Enter topic..."
-                class="flex-1 p-3 rounded bg-gray-900 border border-gray-700 w-96" />
-            <button type="submit"
-                class="bg-white text-black px-4 py-2 rounded font-medium hover:bg-gray-300 transition">
-                Generate
-            </button>
-        </form>
-    </div>
+      <div class="thinking-trace" *ngIf="visibleEvents.length">
+        <article
+          class="trace-event"
+          *ngFor="let event of visibleEvents; let index = index; trackBy: trackByEventIndex"
+          [class.trace-active]="index === activeEventIndex"
+          [class.trace-failed]="event.status === 'failed'"
+        >
+          <span class="trace-dot"></span>
+          <div>
+            <h3>{{ event.agent }}</h3>
+            <p>{{ event.message }}</p>
 
+            <ul class="plan-sections" *ngIf="event.agent === 'Planning Agent' && planTasks.length">
+              <li *ngFor="let task of planTasks; trackBy: trackByTaskId">{{ task.title }}</li>
+            </ul>
+          </div>
+        </article>
+      </div>
+
+      <div class="run-complete" *ngIf="traceComplete && !errorMessage">
+        <span>&#10003;</span>
+        <div>
+          <strong>Completed</strong>
+          <p>Generated blog ready.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="article-stage">
+      <div class="article-heading">
+        <div>
+          <p class="eyebrow">Generated Article</p>
+          <h2>{{ plan?.blog_title || 'Your article will appear here' }}</h2>
+        </div>
+        <span class="stream-state" *ngIf="blogContentRaw">
+          {{ isStreamingComplete ? 'Draft complete' : 'Writing...' }}
+        </span>
+      </div>
+
+      <article class="blog-content prose prose-invert max-w-none" *ngIf="blogContent; else blogEmpty" [innerHTML]="blogContent"></article>
+      <ng-template #blogEmpty>
+        <div class="article-empty">
+          <span class="empty-symbol">AI</span>
+          <p>The generated markdown will stream into this space after the workflow completes.</p>
+        </div>
+      </ng-template>
+
+      <div class="blog-actions" *ngIf="blogContentRaw">
+        <button type="button" (click)="copyToClipboard()" title="Copy raw markdown">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M8 8h11v12H8z"></path>
+            <path d="M5 16H4V4h11v1"></path>
+          </svg>
+          {{ copyLabel }}
+        </button>
+        <button type="button" (click)="downloadMarkdown()" title="Download markdown">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 4v11"></path>
+            <path d="m8 11 4 4 4-4"></path>
+            <path d="M5 20h14"></path>
+          </svg>
+          Download Markdown
+        </button>
+        <button type="button" disabled title="Dev.to publishing is not connected yet">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M7 12h10"></path>
+            <path d="m13 8 4 4-4 4"></path>
+            <path d="M5 19V5h14"></path>
+          </svg>
+          Publish to Dev.to
+        </button>
+      </div>
+    </section>
+  </main>
 </div>
