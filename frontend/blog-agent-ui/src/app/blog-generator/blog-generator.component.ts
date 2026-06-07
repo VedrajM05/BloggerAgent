@@ -11,11 +11,11 @@ import { BlogPlan, BlogService, PlanTask, ProgressEvent } from './blog.service';
 export class BlogGeneratorComponent implements OnDestroy {
   readonly blogGeneratorform: FormGroup;
   readonly loadingMessages = [
-    'Research Agent working...',
-    'Research Analyst extracting insights...',
-    'Planning Agent preparing tasks...',
-    'Writer Agents generating content...',
-    'Editor Agent assembling the final article...'
+    'Research Agent working',
+    'Research Analyst extracting insights',
+    'Planning Agent preparing tasks',
+    'Writer Agents generating content',
+    'Editor Agent assembling the final article'
   ];
 
   loading = false;
@@ -154,7 +154,7 @@ export class BlogGeneratorComponent implements OnDestroy {
       if (this.loadingStep < this.loadingMessages.length - 1) {
         this.loadingStep += 1;
       }
-    }, 1400);
+    }, 2000);
   }
 
   private stopLoadingProgress(): void {

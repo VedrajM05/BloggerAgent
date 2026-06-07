@@ -38,47 +38,57 @@
         <p class="validation-message" *ngIf="blogGeneratorform.get('topic')?.touched && blogGeneratorform.get('topic')?.invalid">
           Enter a topic to start the agent workflow.
         </p>
-      </form>
-    </section>
 
-    <section class="current-run" *ngIf="loading || currentTopic || errorMessage">
-      <div class="run-heading">
-        <div>
-          <p class="eyebrow">Current Run</p>
-          <h2>{{ currentTopic }}</h2>
-        </div>
-        <span class="run-state" *ngIf="loading"><i></i> Thinking</span>
-      </div>
-
-      <p class="loading-message" *ngIf="loading"><i></i>{{ activeLoadingMessage }}</p>
-      <p class="error-message" *ngIf="errorMessage">{{ errorMessage }}</p>
-
-      <div class="thinking-trace" *ngIf="visibleEvents.length">
-        <article
-          class="trace-event"
-          *ngFor="let event of visibleEvents; let index = index; trackBy: trackByEventIndex"
-          [class.trace-active]="index === activeEventIndex"
-          [class.trace-failed]="event.status === 'failed'"
-        >
-          <span class="trace-dot"></span>
-          <div>
-            <h3>{{ event.agent }}</h3>
-            <p>{{ event.message }}</p>
-
-            <ul class="plan-sections" *ngIf="event.agent === 'Planning Agent' && planTasks.length">
-              <li *ngFor="let task of planTasks; trackBy: trackByTaskId">{{ task.title }}</li>
-            </ul>
+        <div class="prompt-trace" *ngIf="loading || visibleEvents.length || traceComplete || errorMessage">
+          <div class="trace-heading">
+            <p class="eyebrow">Current Run</p>
+            <span class="run-state" *ngIf="loading"><i></i> Thinking</span>
           </div>
-        </article>
-      </div>
 
-      <div class="run-complete" *ngIf="traceComplete && !errorMessage">
-        <span>&#10003;</span>
-        <div>
-          <strong>Completed</strong>
-          <p>Generated blog ready.</p>
+          <p class="loading-message" *ngIf="loading">
+            <span class="thinking-orb" aria-hidden="true"></span>
+            <span class="thinking-text">{{ activeLoadingMessage }}<span class="thinking-dots" aria-hidden="true"></span></span>
+          </p>
+          <p class="error-message" *ngIf="errorMessage">{{ errorMessage }}</p>
+
+          <div class="thinking-trace" *ngIf="visibleEvents.length">
+            <article
+              class="trace-event"
+              *ngFor="let event of visibleEvents; let index = index; trackBy: trackByEventIndex"
+              [class.trace-active]="index === activeEventIndex"
+              [class.trace-failed]="event.status === 'failed'"
+            >
+              <span
+                class="trace-status"
+                [class.trace-orb]="index === activeEventIndex"
+                [class.trace-check]="index !== activeEventIndex && event.status !== 'failed'"
+                aria-hidden="true"
+              >
+                <ng-container *ngIf="index !== activeEventIndex && event.status !== 'failed'">&#10003;</ng-container>
+                <ng-container *ngIf="index !== activeEventIndex && event.status === 'failed'">!</ng-container>
+              </span>
+              <div>
+                <h3>{{ event.agent }}</h3>
+                <p>
+                  <span>{{ event.message }}</span><span class="thinking-dots" *ngIf="index === activeEventIndex" aria-hidden="true"></span>
+                </p>
+
+                <ul class="plan-sections" *ngIf="event.agent === 'Planning Agent' && planTasks.length">
+                  <li *ngFor="let task of planTasks; trackBy: trackByTaskId">{{ task.title }}</li>
+                </ul>
+              </div>
+            </article>
+          </div>
+
+          <div class="run-complete" *ngIf="traceComplete && !errorMessage">
+            <span>&#10003;</span>
+            <div>
+              <strong>Completed</strong>
+              <p>Generated blog ready.</p>
+            </div>
+          </div>
         </div>
-      </div>
+      </form>
     </section>
 
     <section class="article-stage">
@@ -87,9 +97,36 @@
           <p class="eyebrow">Generated Article</p>
           <h2>{{ plan?.blog_title || 'Your article will appear here' }}</h2>
         </div>
-        <span class="stream-state" *ngIf="blogContentRaw">
-          {{ isStreamingComplete ? 'Draft complete' : 'Writing...' }}
-        </span>
+        <div class="article-controls">
+          <span class="stream-state" *ngIf="blogContentRaw">
+            {{ isStreamingComplete ? 'Draft complete' : 'Writing...' }}
+          </span>
+          <div class="blog-actions" *ngIf="blogContentRaw">
+            <button type="button" (click)="copyToClipboard()" title="Copy raw markdown">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M8 8h11v12H8z"></path>
+                <path d="M5 16H4V4h11v1"></path>
+              </svg>
+              {{ copyLabel }}
+            </button>
+            <button type="button" (click)="downloadMarkdown()" title="Download markdown">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 4v11"></path>
+                <path d="m8 11 4 4 4-4"></path>
+                <path d="M5 20h14"></path>
+              </svg>
+              Download
+            </button>
+            <button type="button" disabled title="Dev.to publishing is not connected yet">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M7 12h10"></path>
+                <path d="m13 8 4 4-4 4"></path>
+                <path d="M5 19V5h14"></path>
+              </svg>
+              Publish to Dev.to
+            </button>
+          </div>
+        </div>
       </div>
 
       <article class="blog-content prose prose-invert max-w-none" *ngIf="blogContent; else blogEmpty" [innerHTML]="blogContent"></article>
@@ -100,31 +137,6 @@
         </div>
       </ng-template>
 
-      <div class="blog-actions" *ngIf="blogContentRaw">
-        <button type="button" (click)="copyToClipboard()" title="Copy raw markdown">
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M8 8h11v12H8z"></path>
-            <path d="M5 16H4V4h11v1"></path>
-          </svg>
-          {{ copyLabel }}
-        </button>
-        <button type="button" (click)="downloadMarkdown()" title="Download markdown">
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M12 4v11"></path>
-            <path d="m8 11 4 4 4-4"></path>
-            <path d="M5 20h14"></path>
-          </svg>
-          Download Markdown
-        </button>
-        <button type="button" disabled title="Dev.to publishing is not connected yet">
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M7 12h10"></path>
-            <path d="m13 8 4 4-4 4"></path>
-            <path d="M5 19V5h14"></path>
-          </svg>
-          Publish to Dev.to
-        </button>
-      </div>
     </section>
   </main>
 </div>

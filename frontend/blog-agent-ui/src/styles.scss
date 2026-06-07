@@ -159,7 +159,6 @@ h3 {
 }
 
 .status-dot,
-.loading-message i,
 .button-loading i,
 .run-state i {
   width: 7px;
@@ -296,7 +295,6 @@ h1 {
   font-size: 12px;
 }
 
-.current-run,
 .article-stage {
   border: 1px solid rgba(132, 160, 198, .13);
   border-radius: 18px;
@@ -305,13 +303,6 @@ h1 {
   backdrop-filter: blur(12px);
 }
 
-.current-run {
-  max-width: 1040px;
-  margin: 28px auto 0;
-  padding: 22px 24px 24px;
-}
-
-.run-heading,
 .article-heading {
   display: flex;
   align-items: flex-start;
@@ -319,7 +310,6 @@ h1 {
   gap: 24px;
 }
 
-.run-heading h2,
 .article-heading h2 {
   margin-top: 6px;
   color: #eef5ff;
@@ -344,49 +334,126 @@ h1 {
   font-size: 13px;
 }
 
-.thinking-trace {
+.thinking-orb {
   position: relative;
-  margin-top: 18px;
-  padding-left: 8px;
+  display: inline-block;
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  border: 1px solid rgba(144, 202, 255, .52);
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 35% 32%, #e6f4ff 0 12%, #84c4ff 28%, #347edf 64%, rgba(52, 126, 223, .42) 100%);
+  box-shadow:
+    0 0 0 4px rgba(74, 149, 255, .11),
+    0 0 20px rgba(93, 169, 255, .86),
+    0 0 42px rgba(48, 113, 208, .38);
+  animation: thinking-orb-pulse 1.45s ease-in-out infinite;
 }
 
-.thinking-trace::before {
+.thinking-orb::after {
   position: absolute;
-  top: 11px;
-  bottom: 11px;
-  left: 12px;
-  width: 1px;
+  inset: -8px;
+  border: 1px solid rgba(100, 168, 250, .2);
+  border-radius: inherit;
   content: "";
-  background: linear-gradient(rgba(91, 160, 244, .45), rgba(96, 130, 174, .12));
+  animation: thinking-orb-ring 1.45s ease-out infinite;
+}
+
+.thinking-text {
+  color: #a7d3ff;
+  text-shadow: 0 0 12px rgba(86, 163, 255, .34);
+}
+
+.thinking-dots {
+  display: inline-block;
+  width: 1.35em;
+  margin-left: 1px;
+  color: #b8dcff;
+  text-align: left;
+}
+
+.thinking-dots::after {
+  content: ".";
+  animation: thinking-dots 1.05s steps(1, end) infinite;
+}
+
+.prompt-trace {
+  margin-top: 15px;
+  padding: 16px 4px 4px;
+  border-top: 1px solid rgba(131, 160, 200, .11);
+}
+
+.trace-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.thinking-trace {
+  margin-top: 18px;
 }
 
 .trace-event {
+  display: grid;
+  grid-template-columns: 24px 1fr;
+  gap: 12px;
+  padding: 10px 0;
+}
+
+.trace-status {
   position: relative;
   display: grid;
-  grid-template-columns: 18px 1fr;
-  gap: 14px;
-  padding: 11px 0;
-}
-
-.trace-dot {
-  z-index: 1;
-  width: 10px;
-  height: 10px;
-  margin-top: 4px;
-  border: 2px solid #0d121b;
+  width: 18px;
+  height: 18px;
+  margin-top: 2px;
+  place-items: center;
+  border: 1px solid rgba(85, 217, 157, .32);
   border-radius: 50%;
-  background: #38d991;
-  box-shadow: 0 0 0 2px rgba(56, 217, 145, .16);
+  color: #bdf5d9;
+  background: rgba(39, 144, 100, .1);
+  font-size: 11px;
+  font-weight: 900;
+  line-height: 1;
 }
 
-.trace-event.trace-active .trace-dot {
-  background: #62a9ff;
-  box-shadow: 0 0 0 5px rgba(83, 159, 255, .12), 0 0 18px rgba(83, 159, 255, .8);
-  animation: breathe 1.6s ease-in-out infinite;
+.trace-orb {
+  width: 16px;
+  height: 16px;
+  border-color: rgba(144, 202, 255, .52);
+  background:
+    radial-gradient(circle at 35% 32%, #e6f4ff 0 12%, #84c4ff 28%, #347edf 64%, rgba(52, 126, 223, .42) 100%);
+  box-shadow:
+    0 0 0 4px rgba(74, 149, 255, .11),
+    0 0 20px rgba(93, 169, 255, .84),
+    0 0 40px rgba(48, 113, 208, .34);
+  animation: thinking-orb-pulse 1.45s ease-in-out infinite;
 }
 
-.trace-event.trace-failed .trace-dot {
-  background: #ef6c78;
+.trace-orb::after {
+  position: absolute;
+  inset: -7px;
+  border: 1px solid rgba(100, 168, 250, .2);
+  border-radius: inherit;
+  content: "";
+  animation: thinking-orb-ring 1.45s ease-out infinite;
+}
+
+.trace-check {
+  box-shadow: none;
+}
+
+.trace-event.trace-active h3,
+.trace-event.trace-active p {
+  color: #dceeff;
+  text-shadow: 0 0 12px rgba(86, 163, 255, .24);
+}
+
+.trace-event.trace-failed .trace-status {
+  border-color: rgba(239, 108, 120, .34);
+  color: #ffd0d5;
+  background: rgba(239, 108, 120, .1);
 }
 
 .trace-event h3 {
@@ -449,7 +516,9 @@ h1 {
 }
 
 .article-stage {
-  width: 100%;
+  width: min(1040px, 100%);
+  margin-right: auto;
+  margin-left: auto;
   margin-top: 28px;
   overflow: hidden;
 }
@@ -457,6 +526,12 @@ h1 {
 .article-heading {
   padding: 20px 24px;
   border-bottom: 1px solid rgba(131, 160, 200, .11);
+}
+
+.article-controls {
+  display: grid;
+  justify-items: end;
+  gap: 9px;
 }
 
 .stream-state {
@@ -516,9 +591,6 @@ h1 {
 .blog-actions {
   flex-wrap: wrap;
   gap: 9px;
-  padding: 17px 24px;
-  border-top: 1px solid rgba(131, 160, 200, .11);
-  background: rgba(10, 15, 23, .5);
 }
 
 .blog-actions button {
@@ -569,6 +641,48 @@ h1 {
   50% { opacity: .5; transform: scale(.76); }
 }
 
+@keyframes thinking-orb-pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  50% {
+    opacity: .76;
+    transform: scale(.82);
+  }
+}
+
+@keyframes thinking-orb-ring {
+  0% {
+    opacity: .48;
+    transform: scale(.62);
+  }
+
+  70%, 100% {
+    opacity: 0;
+    transform: scale(1.34);
+  }
+}
+
+@keyframes thinking-dots {
+  0%, 25% { content: "."; }
+  26%, 55% { content: ".."; }
+  56%, 100% { content: "..."; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .button-loading i,
+  .run-state i,
+  .thinking-orb,
+  .thinking-orb::after,
+  .trace-orb,
+  .trace-orb::after,
+  .thinking-dots::after {
+    animation: none;
+  }
+}
+
 @media (max-width: 680px) {
   .topbar {
     padding: 0 18px;
@@ -595,13 +709,13 @@ h1 {
     min-height: 46px;
   }
 
-  .current-run {
-    padding: 18px;
-  }
-
-  .run-heading,
   .article-heading {
     display: block;
+  }
+
+  .article-controls {
+    justify-items: start;
+    margin-top: 11px;
   }
 
   .run-state,

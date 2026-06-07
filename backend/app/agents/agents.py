@@ -1027,7 +1027,7 @@ def reducer(state : State) -> dict:
     agent_logger.log_state("reducer", state)
     title = state["plan"].blog_title
     body = "\n\n".join(state["sections"]).strip()
-    final_blog = f"# {title}\n\n{body}\n\n---\n\nGenerated using Agentic AI Blog Writer\n"
+    final_blog = f"# {title}\n\n{body}\n\n"
 
     # save to file
     filename = "generated_blog.md"
@@ -1131,13 +1131,13 @@ def run_blog_writer(topic : str, correlationId : str):
 # External API calls 
 
 
-async def tavily_search(topic: str, max_results: int = 1):
+async def tavily_search(topic: str, max_results: int = 5):
     #print("tavily_search method invoked")
     url = "https://api.tavily.com/search"
     payload = {
         "api_key" : TAVILY_API_KEY,
         "query" : topic,
-        "search_depth" : "basic",
+        "search_depth" : "advanced",
         "max_results" : max_results,
     }
 
