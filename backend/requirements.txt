@@ -9,3 +9,5 @@ asyncpg
 langgraph-checkpoint-postgres
 huggingface_hub
 langsmith
+openai
+google-generativeai

@@ -18,4 +18,5 @@ def generate_blog(req : BlogRequest):
         final=result["final"],
         plan=result.get("plan"),
         events=result.get("progress_events") or [],
+        quality_assessment=result.get("quality_assessment")
         )

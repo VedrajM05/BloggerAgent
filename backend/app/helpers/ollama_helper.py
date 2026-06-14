@@ -4,9 +4,9 @@ from pydantic import BaseModel
 import requests
 
 OLLAMA_URL = "http://localhost:11434/api/generate"
-MODEL = "llama3" #"phi3:medium" "llama3"
+MODEL = "deepseek-r1:8b" #"phi3:medium" "llama3"  "deepseek-r1:8b"
 
-def call_ollama_structured(prompt: str) -> str:
+def call_ollama_structured(prompt: str, model_name : str) -> str:
     """
     Use Ollama in JSON mode for structured outputs that are parsed by Pydantic.
     """
@@ -14,17 +14,20 @@ def call_ollama_structured(prompt: str) -> str:
     response = requests.post(
         OLLAMA_URL,
         json={
-            "model": MODEL,
+            "model": model_name,
             "prompt": prompt,
             "stream": False,
             "format": "json",
             "options": {"temperature": 0},
         },
     )
+    # print("OLLAMA RAW RESPONSE:")
+    # print(response.json())
+
     return response.json()["response"]
 
 
-def call_ollama_text(prompt: str) -> str:
+def call_ollama_text(prompt: str, model_name : str) -> str:
     """
     Use Ollama in plain-text mode for free-form generation (e.g., Markdown sections).
     IMPORTANT: Do NOT use JSON mode here.
@@ -33,7 +36,7 @@ def call_ollama_text(prompt: str) -> str:
     response = requests.post(
         OLLAMA_URL,
         json={
-            "model": MODEL,
+            "model": model_name,
             "prompt": prompt,
             "stream": False,
             "options": {"temperature": 0},
@@ -44,8 +47,8 @@ def call_ollama_text(prompt: str) -> str:
 
 # Backwards-compatible alias used across the codebase.
 # Prefer call_ollama_structured() or call_ollama_text() in new code.
-def call_ollama(prompt: str) -> str:
-    return call_ollama_structured(prompt)
+def call_ollama(prompt: str, model_name : str) -> str:
+    return call_ollama_structured(prompt, model_name)
 
 def normalize_for_pydantic(data):
     """

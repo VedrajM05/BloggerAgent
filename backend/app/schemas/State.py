@@ -1,8 +1,9 @@
 import operator
-from typing import Annotated, List, TypedDict
+from typing import Annotated, List, Optional, TypedDict
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from schemas.QualityAssessment import QualityAssessment
 from schemas.Plan import Plan
 from schemas.ProgressEvent import ProgressEvent
 
@@ -19,7 +20,7 @@ class State(TypedDict):
     progress_events: Annotated[List[ProgressEvent], operator.add]
     final : str
     published_url : str
-    # research: list[str] 
+    quality_assessment : QualityAssessment | None
 
 class SearchResult(BaseModel):
     title : str
@@ -41,30 +42,47 @@ class TavilyResponse(BaseModel):
 #     risks_and_challenges: list[str] = Field(description="Failure modes, limitations, edge cases")
 #     important_trends: list[str] = Field(description="Recent developments, industry usage, future direction")
 
+# class ResearchSummary(BaseModel):
+
+#     model_config = ConfigDict(
+#         extra="ignore"
+#     )
+
+#     core_concepts: list[str] = Field(
+#         default_factory=list,
+#         description="5-10 detailed technical concepts extracted from research"
+#     )
+
+#     technical_details: list[str] = Field(
+#         default_factory=list,
+#         description="Implementation details, formulas, architectures, examples"
+#     )
+
+#     risks_and_challenges: list[str] = Field(
+#         default_factory=list,
+#         description="Failure modes, limitations, edge cases"
+#     )
+
+#     important_trends: list[str] = Field(
+#         default_factory=list,
+#         description="Recent developments, industry usage, future direction"
+#     )
+
 class ResearchSummary(BaseModel):
+    core_concepts: list[str] = Field(default_factory=list)
 
-    model_config = ConfigDict(
-        extra="ignore"
-    )
+    frameworks_and_tools: list[str] = Field(default_factory=list)
 
-    core_concepts: list[str] = Field(
-        default_factory=list,
-        description="5-10 detailed technical concepts extracted from research"
-    )
+    technical_details: list[str] = Field(default_factory=list)
 
-    technical_details: list[str] = Field(
-        default_factory=list,
-        description="Implementation details, formulas, architectures, examples"
-    )
+    evaluation_metrics: list[str] = Field(default_factory=list)
 
-    risks_and_challenges: list[str] = Field(
-        default_factory=list,
-        description="Failure modes, limitations, edge cases"
-    )
+    risks_and_challenges: list[str] = Field(default_factory=list)
 
-    important_trends: list[str] = Field(
-        default_factory=list,
-        description="Recent developments, industry usage, future direction"
-    )
+    production_considerations: list[str] = Field(default_factory=list)
+
+    important_trends: list[str] = Field(default_factory=list)
+
+
 
     

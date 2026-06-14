@@ -2,21 +2,23 @@ import asyncio
 import json
 import os
 import re
-from pathlib import Path
-import dotenv
+# import dotenv
 import httpx
+import requests
+from pathlib import Path
 from langgraph.graph import StateGraph, START, END
 from typing import Annotated, List, Literal, TypedDict
 from langgraph.graph.message import add_messages
 from langgraph.types import Send 
-from langchain_openai import ChatOpenAI
+from langchain_openai import ChatOpenAI, OpenAI
 from huggingface_hub import InferenceClient
-from dotenv import load_dotenv
 from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
 from huggingface_hub import InferenceClient
-import requests
+from helpers.gpt_helper import call_gpt
+from schemas.QualityAssessment import QualityAssessment
 from schemas.Tasks import Tasks
-from helpers.ollama_helper import call_ollama, call_ollama_text, parse_structured_output
+from helpers.ollama_helper import call_ollama, call_ollama_structured, call_ollama_text, parse_structured_output
+from helpers.gemini_helper import call_gemini_text
 from schemas.Plan import Plan
 from schemas.ProgressEvent import ProgressEvent
 from schemas.State import ResearchSummary, SearchResult, State, TavilyResponse
@@ -29,6 +31,7 @@ agent_logger  = AgentLogger()
 deepseek_r1 = "deepseek-ai/DeepSeek-R1"
 
 # logic to load prompt must be at a top, if written inside langgraph nodes, every node call prompt keeps loading
+# region Load prompts
 worker_prompt = PromptLoader.load_prompts(
         "blog_worker.md",
         input_variables=[
@@ -52,13 +55,31 @@ research_summarizer_prompt = PromptLoader.load_prompts(
         "research_summarizer.md",
         input_variables=["research_context", "topic"]
     )
-dotenv.load_dotenv()
+editor_prompt = PromptLoader.load_prompts(
+        "editor_prompt.md",
+        input_variables=["blog_content", "topic"]
+    )
+
+judge_prompt = PromptLoader.load_prompts(
+        "judge_prompt.md",
+        input_variables=["blog_content", "topic"]
+    )
+# endregion Load prompts
 
 TAVILY_API_KEY  = os.getenv("TAVILY_API_KEY")
 
 # llm = ChatOpenAI()
 # llm = InferenceClient(model=deepseek_r1)
 
+# client = OpenAI()
+
+#region Models
+MODEL_JUDGE = "deepseek-r1:8b"
+MODEL_OTHER = "phi3:medium"
+#endregion
+
+
+#region Data Cleaning
 
 def _truncate_text(text: str, limit: int = 1500) -> str:
     if text is None:
@@ -492,7 +513,7 @@ def perform_section_research(query: str, correlationId: str | None = None) -> st
     Limits to a single best source to avoid excessive parallel API calls.
     """
     try:
-        search_results = asyncio.run(tavily_search(query, max_results=5))
+        search_results = asyncio.run(tavily_search(query, max_results=15))
     except Exception as e:
         agent_logger.logger.exception(
             f"[CID: {correlationId}] | [NODE: worker] | Section Tavily search failed: {e}"
@@ -529,7 +550,7 @@ def perform_section_research(query: str, correlationId: str | None = None) -> st
 
     raw = extracted_by_url.get(best_url) or best.get("content") or ""
     cleaned = clean_extracted_content(raw)
-    cleaned = truncate_content(cleaned, max_chars=6000)
+    cleaned = truncate_content(cleaned, max_chars=12000)
 
     if not cleaned:
         return ""
@@ -572,7 +593,36 @@ def format_research_summary_for_worker(summary: ResearchSummary) -> str:
 
     return "\n\n".join(parts).strip()
 
+# ==========================
+# Reducer Helpers
+# ==========================
 
+def clean_section(section: str) -> str:
+
+    if not section:
+        return ""
+
+    # remove placeholder URLs
+    section = re.sub(
+        r"https?://example\.com\S*",
+        "",
+        section,
+        flags=re.IGNORECASE
+    )
+
+    # remove References heading
+    section = re.sub(
+        r"#+\s*References.*?$",
+        "",
+        section,
+        flags=re.IGNORECASE | re.MULTILINE
+    )
+
+    return section.strip()
+#endregion Data Cleaning
+
+
+#region LangGraph Nodes
 def tavily_search_node(state : State) -> dict:
     topic = state["topic"]
     agent_logger.log_state("tavily_search_node", state)
@@ -628,7 +678,6 @@ def tavily_search_node(state : State) -> dict:
     #     agent_logger.log_state("content", res.content)
     # print(f"tavily_response.results : \n",tavily_response.results)
     return {"research_content" : tavily_response.results}
-
 
 def research_node(state: State) -> dict:
     """
@@ -725,7 +774,7 @@ def research_node(state: State) -> dict:
         )
 
     scored.sort(key=lambda x: x[0], reverse=True)
-    top_results = [r for _, r in scored[:2]]
+    top_results = [r for _, r in scored[:5]]
     top_urls = [r.get("url") for r in top_results if r.get("url")]
 
     agent_logger.logger.info(
@@ -801,11 +850,10 @@ def research_node(state: State) -> dict:
         "progress_events": [event],
     }
 
-
 def research_summarizer_node(state: State) -> dict:
     correlation_id = state.get("correlationId")
     topic=state.get("topic")
-    research_context = (state.get("research_context", "") or "")[:6000]
+    research_context = (state.get("research_context", "") or "")[:25000]
 
     agent_logger.log_state("research_summarizer_node", state)
     agent_logger.logger.info(
@@ -814,7 +862,7 @@ def research_summarizer_node(state: State) -> dict:
     
     formatted_prompt = research_summarizer_prompt.format(research_context=research_context, topic = topic)
 
-    raw_output = call_ollama(formatted_prompt)
+    raw_output = call_ollama(formatted_prompt, MODEL_OTHER)
     summary = parse_structured_output(raw_output, ResearchSummary)
 
     if len(summary.core_concepts) == 0 and len(summary.technical_details) == 0:
@@ -834,13 +882,23 @@ def research_summarizer_node(state: State) -> dict:
 
     try:
         summary_json = json.dumps(summary.model_dump(), ensure_ascii=False)
-        agent_logger.logger.info(
-            f"[CID: {correlation_id}] | [NODE: research_summarizer] | "
-            f"Extracted concepts={len(summary.core_concepts)} | "
-            f"Technical details={len(summary.technical_details)} | "
-            f"Research Summary Details={summary_json} | "
-            f"Summary chars={len(summary_json)}"
-        )
+        # agent_logger.logger.info(
+        #     f"[CID: {correlation_id}] | [NODE: research_summarizer] | "
+        #     f"Extracted concepts={len(summary.core_concepts)} | "
+        #     f"Technical details={len(summary.technical_details)} | "
+        #     f"Research Summary Details={summary_json} | "
+        #     f"Summary chars={len(summary_json)}"
+        # )
+        agent_logger.info(
+                f"Concepts={len(summary.core_concepts)} | "
+                f"Frameworks={len(summary.frameworks_and_tools)} | "
+                f"Metrics={len(summary.evaluation_metrics)} | "
+                f"Technical={len(summary.technical_details)} | "
+                f"Production={len(summary.production_considerations)}"
+                f"Research Summary Details={summary_json} | "
+                f"Summary chars={len(summary_json)}"
+                )
+
     except Exception as e:
         agent_logger.logger.exception(
             f"[CID: {correlation_id}] | [NODE: research_summarizer] | Failed to log summary stats: {e}"
@@ -855,7 +913,6 @@ def research_summarizer_node(state: State) -> dict:
         status="completed",
     )
     return {"research_summary": summary, "progress_events": [event]}
-
 
 def orchestrator(state : State) -> dict:
     agent_logger.log_state("orchestrator", state)
@@ -888,12 +945,19 @@ def orchestrator(state : State) -> dict:
 
     formatted_prompt = orchestrator_prompt.format(
         topic=topic,
+        core_concepts = research_summary.core_concepts,
+        frameworks_and_tools = research_summary.frameworks_and_tools,
+        evaluation_metrics = research_summary.evaluation_metrics,
+        technical_details = research_summary.technical_details,
+        production_considerations = research_summary.production_considerations,
+        risks_and_challenges = research_summary.risks_and_challenges,
+        important_trends = research_summary.important_trends,
         research_summary=research_summary_json,
     )
     # print("formatted_prompt  completed")
     #agent_logger.log_prompt(node_name="orchestrator", correlationId= state.get("correlationId"), prompt=formatted_prompt)
     #plan = llm.with_structured_output(Plan).invoke(formatted_prompt)
-    raw_output = call_ollama(formatted_prompt)
+    raw_output = call_ollama(formatted_prompt, MODEL_OTHER)
     # print("call ollama  completed")
     plan = parse_structured_output(raw_output, Plan)
     
@@ -929,7 +993,15 @@ def worker(payload : dict) -> dict:
     topic = payload["topic"]
     plan = payload["plan"]
     research_summary = payload.get("research_summary")
+    agent_logger.logger.info(f"Research Summary Type={type(research_summary)}")
     correlationId = payload.get("correlationId")
+    core_concepts = research_summary.core_concepts
+    frameworks_and_tools = research_summary.frameworks_and_tools
+    evaluation_metrics = research_summary.evaluation_metrics
+    technical_details = research_summary.technical_details
+    production_considerations = research_summary.production_considerations
+    risks_and_challenges = research_summary.risks_and_challenges
+    important_trends = research_summary.important_trends
 
     agent_logger.logger.info(
             f"[CID: {correlationId}] | "
@@ -952,7 +1024,7 @@ def worker(payload : dict) -> dict:
     bullets_list = getattr(task, "bullets", None) or []
     bullets_text = "\n".join([f"- {b}" for b in bullets_list]) if bullets_list else ""
     section_type = getattr(task, "section_type", "") or ""
-    target_words = max(int(getattr(task, "target_words", None) or 200), 600)
+    target_words = max(int(getattr(task, "target_words", None) or 200), 250)
 
     formatted_prompt = worker_prompt.format(
         topic=topic,
@@ -964,8 +1036,35 @@ def worker(payload : dict) -> dict:
         bullets=bullets_text,
         section_type=section_type,
         research_summary=research_summary_text,
-        target_words=target_words,
-    )
+        
+        core_concepts="\n".join(core_concepts),
+
+        frameworks_and_tools="\n".join(
+            frameworks_and_tools
+        ),
+
+        evaluation_metrics="\n".join(
+            evaluation_metrics
+        ),
+
+        technical_details="\n".join(
+            technical_details
+        ),
+
+        production_considerations="\n".join(
+            production_considerations
+        ),
+
+        risks_and_challenges="\n".join(
+            risks_and_challenges
+        ),
+
+        important_trends="\n".join(
+            important_trends
+        ),
+
+        target_words=target_words
+        )
 
     agent_logger.logger.info(
         f"[CID: {correlationId}] | [NODE: worker] | "
@@ -976,9 +1075,9 @@ def worker(payload : dict) -> dict:
     )
     
     # log_prompt creating too much prompts in log file
-    #agent_logger.log_prompt(node_name="worker", correlationId= correlationId, prompt=formatted_prompt)
+    agent_logger.log_prompt(node_name="worker", correlationId= correlationId, prompt=formatted_prompt)
     #raw_output = call_ollama(formatted_prompt)
-    section_md = call_ollama_text(formatted_prompt) #llm.invoke(formatted_prompt).content.strip()
+    section_md = call_ollama_text(formatted_prompt, MODEL_OTHER) #llm.invoke(formatted_prompt).content.strip()
 
     agent_logger.logger.info(
         f"[CID: {correlationId}] | [NODE: worker] | post_ollama | response_len={len(section_md or '')}"
@@ -1007,7 +1106,7 @@ def worker(payload : dict) -> dict:
             "Do not output JSON.\n"
             "Do not output metadata."
         )
-        section_md = call_ollama_text(retry_prompt)
+        section_md = call_ollama_text(retry_prompt, MODEL_OTHER)
 
     agent_logger.logger.info(
         f"[CID: {correlationId}] | [NODE: worker] | generated_section_chars={len(section_md or '')}"
@@ -1023,12 +1122,34 @@ def worker(payload : dict) -> dict:
     )
     return {"sections": [section_md], "progress_events": [post_event]}
 
+def edit_blog(topic : str, blog_content: str)-> str:
+    formatted_prompt = editor_prompt.format(topic = topic, blog_content = blog_content)
+
+    # edited_blog = call_ollama_text(
+    #     formatted_prompt,
+    #     MODEL_JUDGE
+    # )
+
+    edited_blog = call_gemini_text(formatted_prompt)
+    #edited_blog = call_ollama_text(formatted_prompt, MODEL_JUDGE)
+
+    return edited_blog.strip()
+
 def reducer(state : State) -> dict:
     agent_logger.log_state("reducer", state)
     title = state["plan"].blog_title
-    body = "\n\n".join(state["sections"]).strip()
-    final_blog = f"# {title}\n\n{body}\n\n"
+    # body = "\n\n".join(state["sections"]).strip()
+    cleaned_sections = [
+        clean_section(section)
+        for section in state["sections"]
+    ]
 
+    body = "\n\n".join(cleaned_sections).strip()
+
+    edited_blog = edit_blog(topic=state["topic"],blog_content=body)
+
+    # final_blog = f"# {title}\n\n{edited_blog}\n\n"
+    final_blog = edited_blog
     # save to file
     filename = "generated_blog.md"
     output_dir = Path("output")
@@ -1092,6 +1213,23 @@ def publish_to_devto_node(state : State) -> dict:
         #print("Publish error : ", str(e))
         return {"published_url":""}
 
+def judge(state : State) -> dict:
+    
+    topic = state["topic"]
+    blog_content = state["final"]
+
+    quality_assessment = review_and_judge_blog(topic=topic, blog_content=blog_content)
+
+    progress_events = ProgressEvent(
+        agent="Judge Agent",
+        message=f"Overall score {quality_assessment.overall_score}/10",
+        status="completed"
+    )
+
+    return {"quality_assessment" : quality_assessment, "progress_events" : [progress_events] }
+
+
+#endregion LangGraph Nodes
 
 
 g = StateGraph(State)
@@ -1101,6 +1239,7 @@ g.add_node("research_summarizer_node", research_summarizer_node)
 g.add_node("orchestrator", orchestrator)
 g.add_node("worker", worker)
 g.add_node("reducer", reducer)
+g.add_node("judge", judge)
 # g.add_node("publish_to_devto_node", publish_to_devto_node)
 
 g.add_edge(START, "research_node")
@@ -1108,8 +1247,8 @@ g.add_edge("research_node", "research_summarizer_node")
 g.add_edge("research_summarizer_node", "orchestrator")
 g.add_conditional_edges("orchestrator", fanout, ["worker"])
 g.add_edge("worker", "reducer")
-
-g.set_finish_point("reducer")
+g.add_edge("reducer", "judge")
+g.set_finish_point("judge")
 
 # g.add_edge("worker", "reducer")
 # g.add_edge("reducer", "tavily_search_node")
@@ -1213,3 +1352,26 @@ async def tavily_extract(urls: list[str]) -> dict[str, str]:
 
     return extracted
      
+def review_and_judge_blog(topic : str, blog_content : str, provider : str = "ollama") -> QualityAssessment:
+    
+    formatted_prompt = judge_prompt.format(blog_content=blog_content, topic = topic)
+    if provider == "ollama":
+        raw_output = call_ollama_structured(formatted_prompt, MODEL_JUDGE)
+    elif provider == "openai": 
+         raw_output = call_gpt(formatted_prompt)
+    else:
+        raise ValueError(f"Unsupported Provider {provider}")
+    
+    final_assessment = parse_structured_output(raw_output, QualityAssessment)
+    return final_assessment
+
+
+# blog_path = Path("output/generated_blog.md")
+# blog_content = blog_path.read_text(encoding="utf-8")
+
+# assessment = review_and_judge_blog(topic="RAG Evaluation",blog_content=blog_content, provider="ollama")
+
+# print(assessment.model_dump_json(indent=2))
+
+
+    

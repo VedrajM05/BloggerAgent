@@ -2,6 +2,7 @@ from typing import List, Optional
 from typing import Optional
 
 from pydantic import BaseModel
+from schemas.QualityAssessment import QualityAssessment
 from schemas.Plan import Plan
 from schemas.ProgressEvent import ProgressEvent
 
@@ -15,3 +16,4 @@ class BlogResponse(BaseModel):
     final: str
     plan: Optional[Plan] = None
     events: list[ProgressEvent]
+    quality_assessment : QualityAssessment
