@@ -36,9 +36,14 @@ export interface BlogResponse {
   providedIn: 'root'
 })
 export class BlogService {
+  private readonly baseUrl = '';
   constructor(private http: HttpClient) {}
 
-  generateBlog(topic: string): Observable<BlogResponse> {
-    return this.http.post<BlogResponse>(`${environment.apiBaseUrl}/generate-blog`, { topic });
+  generateBlog(topic: string, correlationId: string): Observable<BlogResponse> {
+    return this.http.post<BlogResponse>(`${environment.apiBaseUrl}/generate-blog`, { topic,correlationId });
+  }
+
+  connectToEvents(correlationId: string): EventSource {
+    return new EventSource(`${environment.sseBaseUrl}/events/events/${correlationId}`)
   }
 }

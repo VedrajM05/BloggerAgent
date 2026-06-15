@@ -41,8 +41,18 @@
 
         <div class="prompt-trace" *ngIf="loading || visibleEvents.length || traceComplete || errorMessage">
           <div class="trace-heading">
-            <p class="eyebrow">Current Run</p>
-            <span class="run-state" *ngIf="loading"><i></i> Thinking</span>
+            <!-- <p class="eyebrow">Current Run</p> -->
+            <div class="run-feed">
+
+          <div class="run-event" *ngFor="let event of visibleEvents">
+            <span class="run-dot"></span>
+            <span class="run-message">
+              {{ event.message }}
+            </span>
+          </div>
+
+        </div>
+            <!-- <span class="run-state" *ngIf="loading"><i></i> Thinking</span> -->
           </div>
 
           <p class="loading-message" *ngIf="loading">
@@ -51,7 +61,7 @@
           </p>
           <p class="error-message" *ngIf="errorMessage">{{ errorMessage }}</p>
 
-          <div class="thinking-trace" *ngIf="visibleEvents.length">
+          <!-- <div class="thinking-trace" *ngIf="visibleEvents.length">
             <article
               class="trace-event"
               *ngFor="let event of visibleEvents; let index = index; trackBy: trackByEventIndex"
@@ -78,7 +88,7 @@
                 </ul>
               </div>
             </article>
-          </div>
+          </div> -->
 
           <div class="run-complete" *ngIf="traceComplete && !errorMessage">
             <span>&#10003;</span>

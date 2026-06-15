@@ -142,14 +142,29 @@ Use ONLY these values.
 ## COMMON MISTAKES RULE
 
 Create exactly one:
-
 common_mistakes
-
 section.
 
 Only use mistakes supported by research.
 
 ---
+
+## CONCEPT PRIORITIZATION RULE
+
+Use concept centrality as the primary planning signal.
+Priority order:
+1. central_concepts
+2. important_concepts
+3. supporting_concepts
+
+The article must primarily teach central concepts.
+Important concepts may be used to deepen understanding.
+Supporting concepts may provide examples, tools,frameworks, implementation details, deployment guidance,or operational considerations.
+
+Supporting concepts must never dominate the article.
+
+If a supporting concept receives more coverage than
+a central concept, the plan is incorrect.
 
 ## OUTPUT FORMAT
 

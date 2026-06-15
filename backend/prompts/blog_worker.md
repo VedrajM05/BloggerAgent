@@ -101,8 +101,14 @@ Required points:
 
 Research Summary
 
-Core Concepts:
-{core_concepts}
+Central Concepts:
+{central_concepts}
+
+Important Concepts:
+{important_concepts}
+
+Supporting Concepts:
+{supporting_concepts}
 
 Frameworks and Tools:
 {frameworks_and_tools}

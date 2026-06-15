@@ -593,6 +593,72 @@ h1 {
   gap: 9px;
 }
 
+.run-feed {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.run-event {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.current-event {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+
+  padding: 12px 0;
+}
+
+.event-spinner {
+  width: 10px;
+  height: 10px;
+
+  border-radius: 50%;
+
+  background: #60a5fa;
+
+  animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+
+  0% {
+    opacity: 0.4;
+  }
+
+  50% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0.4;
+  }
+}
+
+.run-complete {
+
+  color: #22c55e;
+
+  font-weight: 600;
+
+  padding: 12px 0;
+}
+
+
+
+.run-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #60a5fa;
+
+  animation: pulse 1.5s infinite;
+}
+
 .blog-actions button {
   display: flex;
   gap: 7px;

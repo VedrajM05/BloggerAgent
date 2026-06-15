@@ -1,4 +1,5 @@
 from fastapi import APIRouter
+from api.v1 import events
 from schemas.Blog import BlogRequest, BlogResponse
 from api.v1 import health
 from agents.agents import run_blog_writer
@@ -7,11 +8,12 @@ import uuid
 api_router = APIRouter()
 
 api_router.include_router(health.router, prefix="/health")
+api_router.include_router(events.router,prefix="/events")
 
 @api_router.post("/generate-blog", response_model=BlogResponse)
 def generate_blog(req : BlogRequest):
-    correlationId = str(uuid.uuid4())
-    result =  run_blog_writer(req.topic, correlationId = correlationId)
+    # correlationId = str(uuid.uuid4())
+    result =  run_blog_writer(req.topic, correlationId = req.correlationId)
 
     return BlogResponse(
         topic=req.topic,

@@ -69,7 +69,15 @@ class TavilyResponse(BaseModel):
 #     )
 
 class ResearchSummary(BaseModel):
-    core_concepts: list[str] = Field(default_factory=list)
+    # core_concepts: list[str] = Field(default_factory=list)
+    central_concepts: List[str] = Field(default_factory=list,
+                                        description="Concepts that are essential to understanding the topic")
+
+    important_concepts: List[str] = Field(default_factory=list,
+                                        description="Important concepts that expand understanding of the topic")
+    
+    supporting_concepts: List[str] = Field(default_factory=list,
+                                        description="Supporting concepts, tools, examples, operational details")
 
     frameworks_and_tools: list[str] = Field(default_factory=list)
 

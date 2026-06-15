@@ -8,6 +8,7 @@ from schemas.ProgressEvent import ProgressEvent
 
 class BlogRequest(BaseModel):
     topic: str
+    correlationId: str
 
 
     

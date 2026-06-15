@@ -23,22 +23,22 @@ export class BlogGeneratorComponent implements OnDestroy {
   plan: BlogPlan | null = null;
   events: ProgressEvent[] = [];
   visibleEvents: ProgressEvent[] = [];
+  currentEvents: ProgressEvent | null = null;
+  progressEvents: ProgressEvent[] = [];
   blogContentRaw = '';
   blogContent = '';
   errorMessage = '';
   copyLabel = 'Copy markdown';
   isStreamingComplete = false;
   traceComplete = false;
+  isCompleted = false;
   loadingStep = 0;
 
   private loadingTimer?: number;
   private streamTimers: number[] = [];
   private eventTimers: number[] = [];
 
-  constructor(
-    private fb: FormBuilder,
-    private blogService: BlogService
-  ) {
+  constructor(private fb: FormBuilder,private blogService: BlogService) {
     this.blogGeneratorform = this.fb.group({
       topic: ['', [Validators.required, Validators.pattern(/\S+/)]]
     });
@@ -61,20 +61,43 @@ export class BlogGeneratorComponent implements OnDestroy {
       this.blogGeneratorform.markAllAsTouched();
       return;
     }
-
+    this.currentEvents = null;
+    this.traceComplete = false;
     const topic = this.blogGeneratorform.value.topic.trim();
     this.resetGeneration(topic);
     this.loading = true;
     this.startLoadingProgress();
 
-    this.blogService.generateBlog(topic).subscribe({
+    const correlationId = crypto.randomUUID();
+    const eventSource = this.blogService.connectToEvents(correlationId);
+
+    eventSource.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+
+      console.log('SSE Event', data);
+      // this.visibleEvents.push(data);
+
+      if(data.type === 'COMPLETE'){
+        this.isCompleted = true;
+        this.traceComplete = true;
+        eventSource.close;
+
+        return;
+      }
+      this.currentEvents = data;
+      
+    };
+
+
+    this.progressEvents = [];
+    this.blogService.generateBlog(topic, correlationId).subscribe({
       next: (response) => {
         this.stopLoadingProgress();
         this.currentTopic = response.topic;
         this.plan = response.plan;
-        this.events = response.events ?? [];
+        // this.events = response.events ?? [];
         this.loading = false;
-        this.revealEvents(this.events);
+        // this.revealEvents(this.events);
         this.streamBlog(response.final);
       },
       error: () => {

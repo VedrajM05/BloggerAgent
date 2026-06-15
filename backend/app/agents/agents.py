@@ -14,6 +14,7 @@ from langchain_openai import ChatOpenAI, OpenAI
 from huggingface_hub import InferenceClient
 from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
 from huggingface_hub import InferenceClient
+from services.event_manager import publish_event
 from helpers.gpt_helper import call_gpt
 from schemas.QualityAssessment import QualityAssessment
 from schemas.Tasks import Tasks
@@ -575,9 +576,17 @@ def format_research_summary_for_worker(summary: ResearchSummary) -> str:
 
     parts: list[str] = []
 
-    concepts = _bullets(summary.core_concepts, limit=10)
-    if concepts:
-        parts.append("Key Concepts:\n" + concepts)
+    central_concepts = _bullets(summary.central_concepts, limit=10)
+    if central_concepts:
+        parts.append("Central Concepts:\n" + central_concepts)
+
+    important_concepts = _bullets(summary.important_concepts, limit=10)
+    if important_concepts:
+        parts.append("Imp Concepts:\n" + important_concepts)
+
+    supporting_concepts = _bullets(summary.supporting_concepts, limit=10)
+    if supporting_concepts:
+        parts.append("Supporting Concepts:\n" + supporting_concepts)
 
     details = _bullets(summary.technical_details, limit=10)
     if details:
@@ -667,7 +676,7 @@ def tavily_search_node(state : State) -> dict:
         response_time = search_results.get("response_time"),
         request_id = search_results.get("request_id")
     )
-
+    
     # agent_logger.log_state("tavily_search_node", "pydantic model binding completed")
 
     # for res in tavily_response.results:
@@ -703,6 +712,13 @@ def research_node(state: State) -> dict:
             message=f"Web research timed out for {topic}; no sources extracted",
             status="failed",
         )
+
+        publish_event(correlation_id, {
+            "agent": event.agent,
+            "message": event.message,
+            "status": event.status
+        })
+
         return {
             "research_context": "",
             "progress_events": [event],
@@ -865,10 +881,10 @@ def research_summarizer_node(state: State) -> dict:
     raw_output = call_ollama(formatted_prompt, MODEL_OTHER)
     summary = parse_structured_output(raw_output, ResearchSummary)
 
-    if len(summary.core_concepts) == 0 and len(summary.technical_details) == 0:
+    if len(summary.central_concepts) == 0 and len(summary.technical_details) == 0:
         agent_logger.logger.warning(f"[CID:{correlation_id}] Empty summary. Using fallback.")
         summary = ResearchSummary(
-            core_concepts=[
+            central_concepts=[
                 f"High-level overview of {topic}",
                 "Key concepts and architectures (details gathered per section)",
                 "Implementation approaches (details gathered per section)",
@@ -890,7 +906,9 @@ def research_summarizer_node(state: State) -> dict:
         #     f"Summary chars={len(summary_json)}"
         # )
         agent_logger.info(
-                f"Concepts={len(summary.core_concepts)} | "
+                f"Central Concepts={len(summary.central_concepts)} | "
+                f"Imp Concepts={len(summary.important_concepts)} | "
+                f"Supporting Concepts={len(summary.supporting_concepts)} | "
                 f"Frameworks={len(summary.frameworks_and_tools)} | "
                 f"Metrics={len(summary.evaluation_metrics)} | "
                 f"Technical={len(summary.technical_details)} | "
@@ -907,11 +925,17 @@ def research_summarizer_node(state: State) -> dict:
     event = ProgressEvent(
         agent="Research Analyst Agent",
         message=(
-            f"Extracted {len(summary.core_concepts)} concepts and "
+            f"Extracted {len(summary.central_concepts)} central concepts and "
             f"{len(summary.technical_details)} technical insights"
         ),
         status="completed",
     )
+    publish_event(correlation_id, {
+            "agent": event.agent,
+            "message": event.message,
+            "status": event.status
+        })
+
     return {"research_summary": summary, "progress_events": [event]}
 
 def orchestrator(state : State) -> dict:
@@ -919,6 +943,7 @@ def orchestrator(state : State) -> dict:
     topic = state["topic"]
 
     research_summary = state["research_summary"]
+    agent_logger.logger.info("Research Summary:\n%s", research_summary.model_dump_json(indent=2))
     try:
         research_summary_json = (
             research_summary.model_dump_json(indent=2)
@@ -932,11 +957,11 @@ def orchestrator(state : State) -> dict:
         research_summary_json = "{}"
 
     try:
-        core_concepts_count = len(getattr(research_summary, "core_concepts", []) or [])
+        central_concepts_count = len(getattr(research_summary, "central_concepts", []) or [])
         technical_details_count = len(getattr(research_summary, "technical_details", []) or [])
         agent_logger.logger.info(
             f"[CID: {state.get('correlationId')}] | [NODE: orchestrator] | "
-            f"Received concepts={core_concepts_count} | Technical details={technical_details_count}"
+            f"Received concepts={central_concepts_count} | Technical details={technical_details_count}"
         )
     except Exception as e:
         agent_logger.logger.exception(
@@ -945,7 +970,9 @@ def orchestrator(state : State) -> dict:
 
     formatted_prompt = orchestrator_prompt.format(
         topic=topic,
-        core_concepts = research_summary.core_concepts,
+        central_concepts = research_summary.central_concepts,
+        important_concepts = research_summary.important_concepts,
+        supporting_concepts = research_summary.supporting_concepts,
         frameworks_and_tools = research_summary.frameworks_and_tools,
         evaluation_metrics = research_summary.evaluation_metrics,
         technical_details = research_summary.technical_details,
@@ -978,6 +1005,12 @@ def orchestrator(state : State) -> dict:
         message=f"Created {len(plan.tasks)} specialized writing tasks",
         status="completed",
     )
+    publish_event(state.get('correlationId'), {
+            "agent": event.agent,
+            "message": event.message,
+            "status": event.status
+        })
+
     return {"plan" : plan, "progress_events": [event]}
 
 def fanout(state : State):
@@ -995,7 +1028,9 @@ def worker(payload : dict) -> dict:
     research_summary = payload.get("research_summary")
     agent_logger.logger.info(f"Research Summary Type={type(research_summary)}")
     correlationId = payload.get("correlationId")
-    core_concepts = research_summary.core_concepts
+    central_concepts = research_summary.central_concepts
+    important_concepts = research_summary.important_concepts
+    supporting_concepts = research_summary.supporting_concepts
     frameworks_and_tools = research_summary.frameworks_and_tools
     evaluation_metrics = research_summary.evaluation_metrics
     technical_details = research_summary.technical_details
@@ -1037,7 +1072,9 @@ def worker(payload : dict) -> dict:
         section_type=section_type,
         research_summary=research_summary_text,
         
-        core_concepts="\n".join(core_concepts),
+        central_concepts="\n".join(central_concepts),
+        important_concepts="\n".join(important_concepts),
+        supporting_concepts="\n".join(supporting_concepts),
 
         frameworks_and_tools="\n".join(
             frameworks_and_tools
@@ -1120,9 +1157,15 @@ def worker(payload : dict) -> dict:
         message=f"Generated section: {getattr(task, 'title', '')}",
         status="completed",
     )
+    publish_event(correlationId, {
+            "agent": post_event.agent,
+            "message": post_event.message,
+            "status": post_event.status
+        })
+
     return {"sections": [section_md], "progress_events": [post_event]}
 
-def edit_blog(topic : str, blog_content: str)-> str:
+def edit_blog(topic : str, blog_content: str, correlationId : str)-> str:
     formatted_prompt = editor_prompt.format(topic = topic, blog_content = blog_content)
 
     # edited_blog = call_ollama_text(
@@ -1132,7 +1175,16 @@ def edit_blog(topic : str, blog_content: str)-> str:
 
     edited_blog = call_gemini_text(formatted_prompt)
     #edited_blog = call_ollama_text(formatted_prompt, MODEL_JUDGE)
-
+    event = ProgressEvent(
+        agent="Editor Agent",
+        message="Editing all sections into final article",
+        status="completed",
+    )
+    publish_event(correlationId, {
+            "agent": event.agent,
+            "message": event.message,
+            "status": event.status
+        })
     return edited_blog.strip()
 
 def reducer(state : State) -> dict:
@@ -1146,7 +1198,7 @@ def reducer(state : State) -> dict:
 
     body = "\n\n".join(cleaned_sections).strip()
 
-    edited_blog = edit_blog(topic=state["topic"],blog_content=body)
+    edited_blog = edit_blog(topic=state["topic"],blog_content=body, correlationId = state.get('correlationId'))
 
     # final_blog = f"# {title}\n\n{edited_blog}\n\n"
     final_blog = edited_blog
@@ -1166,10 +1218,16 @@ def reducer(state : State) -> dict:
     )
 
     event = ProgressEvent(
-        agent="Editor Agent",
-        message="Combined all sections into final article",
+        agent="Reducer Agent",
+        message="Creating markdown file of final article",
         status="completed",
     )
+    publish_event(state.get('correlationId'), {
+            "agent": event.agent,
+            "message": event.message,
+            "status": event.status
+        })
+
     return {"final": final_blog, "progress_events": [event]}
 
 def publish_to_devto_node(state : State) -> dict:
@@ -1222,10 +1280,16 @@ def judge(state : State) -> dict:
 
     progress_events = ProgressEvent(
         agent="Judge Agent",
-        message=f"Overall score {quality_assessment.overall_score}/10",
+        message=f"GPT Judge judging through pre-determined parameters, overall score {quality_assessment.overall_score}/10",
         status="completed"
     )
-
+    
+    publish_event(state.get('correlationId'), {
+            "agent": progress_events.agent,
+            "message": progress_events.message,
+            "status": progress_events.status,
+            "type":"COMPLETE"
+        })
     return {"quality_assessment" : quality_assessment, "progress_events" : [progress_events] }
 
 
@@ -1249,12 +1313,6 @@ g.add_conditional_edges("orchestrator", fanout, ["worker"])
 g.add_edge("worker", "reducer")
 g.add_edge("reducer", "judge")
 g.set_finish_point("judge")
-
-# g.add_edge("worker", "reducer")
-# g.add_edge("reducer", "tavily_search_node")
-# g.add_edge("tavily_search_node","publish_to_devto_node")
-# g.add_edge("publish_to_devto_node", END)
-# g.set_finish_point("publish_to_devto_node")
 
 workflow = g.compile()
 
@@ -1373,5 +1431,6 @@ def review_and_judge_blog(topic : str, blog_content : str, provider : str = "oll
 
 # print(assessment.model_dump_json(indent=2))
 
+# publish_event("test123", {"message" : "hello"})
 
     
