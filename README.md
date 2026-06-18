@@ -507,6 +507,10 @@ The UI includes:
 
 ---
 
+
+<img width="3840" height="2088" alt="ConsoleLogs" src="https://github.com/user-attachments/assets/7090bca3-6e37-4511-83a4-4b61e556e84b" />
+
+
 # Author
 
 Vedraj Mokashi
