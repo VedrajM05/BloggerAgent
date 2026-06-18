@@ -10,8 +10,8 @@
         <span></span>
       </div>
       <div>
-        <p class="brand-name">Agentic AI Blog Writer</p>
-        <p class="brand-caption">LangGraph writing system</p>
+        <p class="brand-name">Agentic Blog Writer</p>
+        <!-- <p class="brand-caption">LangGraph writing system</p> -->
       </div>
     </div>
     <!-- <div class="system-status">
@@ -39,63 +39,80 @@
           Enter a topic to start the agent workflow.
         </p>
 
-        <div class="prompt-trace" *ngIf="loading || visibleEvents.length || traceComplete || errorMessage">
-          <div class="trace-heading">
-            <!-- <p class="eyebrow">Current Run</p> -->
-            <div class="run-feed">
-
-          <div class="run-event" *ngFor="let event of visibleEvents">
-            <span class="run-dot"></span>
-            <span class="run-message">
-              {{ event.message }}
-            </span>
-          </div>
-
-        </div>
-            <!-- <span class="run-state" *ngIf="loading"><i></i> Thinking</span> -->
-          </div>
-
-          <p class="loading-message" *ngIf="loading">
-            <span class="thinking-orb" aria-hidden="true"></span>
-            <span class="thinking-text">{{ activeLoadingMessage }}<span class="thinking-dots" aria-hidden="true"></span></span>
-          </p>
-          <p class="error-message" *ngIf="errorMessage">{{ errorMessage }}</p>
-
-          <!-- <div class="thinking-trace" *ngIf="visibleEvents.length">
-            <article
-              class="trace-event"
-              *ngFor="let event of visibleEvents; let index = index; trackBy: trackByEventIndex"
-              [class.trace-active]="index === activeEventIndex"
-              [class.trace-failed]="event.status === 'failed'"
-            >
-              <span
-                class="trace-status"
-                [class.trace-orb]="index === activeEventIndex"
-                [class.trace-check]="index !== activeEventIndex && event.status !== 'failed'"
-                aria-hidden="true"
-              >
-                <ng-container *ngIf="index !== activeEventIndex && event.status !== 'failed'">&#10003;</ng-container>
-                <ng-container *ngIf="index !== activeEventIndex && event.status === 'failed'">!</ng-container>
-              </span>
-              <div>
-                <h3>{{ event.agent }}</h3>
-                <p>
-                  <span>{{ event.message }}</span><span class="thinking-dots" *ngIf="index === activeEventIndex" aria-hidden="true"></span>
-                </p>
-
-                <ul class="plan-sections" *ngIf="event.agent === 'Planning Agent' && planTasks.length">
-                  <li *ngFor="let task of planTasks; trackBy: trackByTaskId">{{ task.title }}</li>
-                </ul>
+        <div class="prompt-trace" *ngIf="loading || currentEvent || isCompleted || errorMessage || qualityAssessment">
+          <div class="workflow-panels">
+            <section class="workflow-card run-panel">
+              <div class="run-header">
+                <p class="eyebrow">Current Run</p>
+                <div class="run-timer">
+                  <span class="run-label">Timer</span>
+                  <strong>{{ elapsedSeconds }} sec</strong>
+                </div>
               </div>
-            </article>
-          </div> -->
 
-          <div class="run-complete" *ngIf="traceComplete && !errorMessage">
-            <span>&#10003;</span>
-            <div>
-              <strong>Completed</strong>
-              <p>Generated blog ready.</p>
-            </div>
+              <div class="run-body">
+                <div class="current-event" *ngIf="currentEvent; else runWaiting">
+                  <span class="event-spinner" aria-hidden="true"></span>
+                  <div class="current-event-copy">
+                    <span class="run-label">Latest SSE Event</span>
+                    <h3>{{ currentEvent.agent }}</h3>
+                    <p>{{ currentEvent.message }}</p>
+                  </div>
+                </div>
+
+                <ng-template #runWaiting>
+                  <div class="run-placeholder">
+                    <span class="run-label">Latest SSE Event</span>
+                    <p class="loading-message" *ngIf="loading && !isCompleted">Waiting for live updates...</p>
+                    <p class="loading-message" *ngIf="!loading && !isCompleted">No live event yet.</p>
+                  </div>
+                </ng-template>
+
+                <p class="error-message" *ngIf="errorMessage">{{ errorMessage }}</p>
+                <p class="run-complete" *ngIf="isCompleted && !errorMessage">&#9989; Draft Complete</p>
+              </div>
+            </section>
+
+            <section class="workflow-card quality-section" *ngIf="qualityAssessment">
+              <p class="eyebrow">Quality Assessment by GPT 5.5</p>
+
+              <div class="quality-grid">
+                <div class="metric-card">
+                  <span>Overall</span>
+                  <strong>
+                    {{ qualityAssessment.overall_score }}/10
+                  </strong>
+                </div>
+
+                <div class="metric-card">
+                  <span>Relevance</span>
+                  <strong>
+                    {{ qualityAssessment.relevance_score }}/10
+                  </strong>
+                </div>
+
+                <div class="metric-card">
+                  <span>Accuracy</span>
+                  <strong>
+                    {{ qualityAssessment.technical_accuracy_score }}/10
+                  </strong>
+                </div>
+
+                <div class="metric-card">
+                  <span>Hallucination</span>
+                  <strong>
+                    {{ qualityAssessment.hallucination_risk | titlecase }}
+                  </strong>
+                </div>
+              </div>
+
+              <div class="assessment-summary">
+                <strong>Summary</strong>
+                <p>
+                  {{ qualityAssessment.summary }}
+                </p>
+              </div>
+            </section>
           </div>
         </div>
       </form>
@@ -104,7 +121,7 @@
     <section class="article-stage">
       <div class="article-heading">
         <div>
-          <p class="eyebrow">Generated Article</p>
+          <!-- <p class="eyebrow">Generated Article</p> -->
           <!-- <h2>{{ plan?.blog_title || 'Your article will appear here' }}</h2> -->
         </div>
         <div class="article-controls">
@@ -138,11 +155,13 @@
           </div>
         </div>
       </div>
+      
 
+      
       <article class="blog-content prose prose-invert max-w-none" *ngIf="blogContent; else blogEmpty" [innerHTML]="blogContent"></article>
       <ng-template #blogEmpty>
         <div class="article-empty">
-          <span class="empty-symbol">AI</span>
+          <!-- <span class="empty-symbol">AI</span> -->
           <p>The generated markdown will stream into this space after the workflow completes.</p>
         </div>
       </ng-template>

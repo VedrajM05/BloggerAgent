@@ -9,6 +9,10 @@ export interface ProgressEvent {
   status: string;
 }
 
+export interface CompleteEvent {
+  type: 'COMPLETE';
+}
+
 export interface PlanTask {
   id: number;
   title: string;
@@ -30,6 +34,18 @@ export interface BlogResponse {
   final: string;
   plan: BlogPlan | null;
   events: ProgressEvent[];
+  quality_assessment? : QualityAssessment | null;
+}
+
+export interface QualityAssessment {
+  relevance_score: number;
+  technical_accuracy_score: number;
+  hallucination_risk: string;
+  strengths: string[];
+  weaknesses: string[];
+  missing_topics: string[];
+  summary: string;
+  overall_score: number;
 }
 
 @Injectable({

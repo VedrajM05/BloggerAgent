@@ -200,8 +200,63 @@ h1 {
   font-size: 16px;
 }
 
+.quality-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.metric-card {
+  border: 1px solid rgba(136, 161, 197, .14);
+  border-radius: 12px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  background: rgba(10, 16, 25, .72);
+}
+
+.metric-card span {
+  color: #91a4bb;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+.metric-card strong {
+  color: #edf5ff;
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.assessment-summary {
+  margin-top: 16px;
+  padding: 13px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(136, 161, 197, .14);
+  background: rgba(10, 16, 25, .58);
+}
+
+.assessment-summary strong {
+  color: #edf5ff;
+  font-size: 12px;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+.assessment-summary p {
+  margin-top: 8px;
+  color: #97a9bf;
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+
 .topic-form {
-  margin-top: 30px;
+  margin-top: -20px;
   padding: 12px;
   border: 1px solid rgba(142, 165, 199, .15);
   border-radius: 16px;
@@ -380,15 +435,87 @@ h1 {
 
 .prompt-trace {
   margin-top: 15px;
-  padding: 16px 4px 4px;
+  padding-top: 16px;
   border-top: 1px solid rgba(131, 160, 200, .11);
 }
 
-.trace-heading {
+.workflow-panels {
+  display: grid;
+  grid-template-columns: minmax(260px, .9fr) minmax(0, 2.1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.workflow-panels > :only-child {
+  grid-column: 1 / -1;
+}
+
+.workflow-card {
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid rgba(136, 161, 197, .14);
+  border-radius: 14px;
+  background: rgba(10, 16, 25, .56);
+}
+
+.run-panel {
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.run-header {
+  display: flex;
+  align-items: flex-start;
   justify-content: space-between;
-  gap: 18px;
+  gap: 12px;
+}
+
+.run-timer {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.run-timer strong {
+  color: #edf5ff;
+  font-size: 18px;
+  line-height: 1;
+}
+
+.run-label {
+  color: #7f93ab;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+
+.run-body,
+.quality-section {
+  display: flex;
+  flex-direction: column;
+}
+
+.run-body {
+  gap: 12px;
+}
+
+.quality-section {
+  gap: 12px;
+}
+
+.run-placeholder {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 72px;
+}
+
+.run-placeholder .loading-message,
+.run-body .error-message {
+  margin-top: 0;
 }
 
 .thinking-trace {
@@ -456,14 +583,21 @@ h1 {
   background: rgba(239, 108, 120, .1);
 }
 
-.trace-event h3 {
+.current-event h3 {
   color: #dfe9f7;
   font-size: 13px;
   font-weight: 700;
 }
 
-.trace-event p,
-.run-complete p,
+.current-event-copy {
+  min-width: 0;
+}
+
+.current-event-copy h3 {
+  margin-top: 6px;
+}
+
+.current-event p,
 .article-empty p {
   margin-top: 5px;
   color: #8492a5;
@@ -481,38 +615,6 @@ h1 {
 
 .plan-sections li::marker {
   color: #5ea8ff;
-}
-
-.run-complete {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-  margin-top: 16px;
-  padding: 14px 16px;
-  border: 1px solid rgba(56, 217, 145, .18);
-  border-radius: 11px;
-  background: rgba(39, 144, 100, .08);
-}
-
-.run-complete span {
-  display: grid;
-  width: 25px;
-  height: 25px;
-  place-items: center;
-  border-radius: 50%;
-  color: #062617;
-  background: #55d99d;
-  font-size: 13px;
-  font-weight: 900;
-}
-
-.run-complete strong {
-  color: #bdf5d9;
-  font-size: 13px;
-}
-
-.run-complete p {
-  margin-top: 2px;
 }
 
 .article-stage {
@@ -607,20 +709,16 @@ h1 {
 
 .current-event {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 12px;
-
-  padding: 12px 0;
+  padding: 0;
 }
 
 .event-spinner {
   width: 10px;
   height: 10px;
-
   border-radius: 50%;
-
   background: #60a5fa;
-
   animation: pulse 1.5s infinite;
 }
 
@@ -640,12 +738,11 @@ h1 {
 }
 
 .run-complete {
-
+  margin-top: auto;
   color: #22c55e;
-
   font-weight: 600;
-
-  padding: 12px 0;
+  font-size: 14px;
+  line-height: 1.5;
 }
 
 
@@ -773,6 +870,26 @@ h1 {
 
   .input-row button {
     min-height: 46px;
+  }
+
+  .workflow-panels {
+    grid-template-columns: 1fr;
+  }
+
+  .workflow-card {
+    padding: 14px;
+  }
+
+  .run-header {
+    flex-direction: column;
+  }
+
+  .run-timer {
+    align-items: flex-start;
+  }
+
+  .quality-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .article-heading {

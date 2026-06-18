@@ -1,7 +1,8 @@
 import { Component, OnDestroy } from '@angular/core';
 import { FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { marked } from 'marked';
-import { BlogPlan, BlogService, PlanTask, ProgressEvent } from './blog.service';
+import { BlogPlan, BlogService, CompleteEvent, ProgressEvent, QualityAssessment } from './blog.service';
+import { NgZone } from '@angular/core';
 
 @Component({
   selector: 'app-blog-generator',
@@ -10,50 +11,28 @@ import { BlogPlan, BlogService, PlanTask, ProgressEvent } from './blog.service';
 })
 export class BlogGeneratorComponent implements OnDestroy {
   readonly blogGeneratorform: FormGroup;
-  readonly loadingMessages = [
-    'Research Agent working',
-    'Research Analyst extracting insights',
-    'Planning Agent preparing tasks',
-    'Writer Agents generating content',
-    'Editor Agent assembling the final article'
-  ];
 
   loading = false;
   currentTopic = '';
   plan: BlogPlan | null = null;
-  events: ProgressEvent[] = [];
-  visibleEvents: ProgressEvent[] = [];
-  currentEvents: ProgressEvent | null = null;
-  progressEvents: ProgressEvent[] = [];
+  currentEvent: ProgressEvent | null = null;
   blogContentRaw = '';
   blogContent = '';
   errorMessage = '';
   copyLabel = 'Copy markdown';
   isStreamingComplete = false;
-  traceComplete = false;
   isCompleted = false;
-  loadingStep = 0;
+  qualityAssessment : QualityAssessment | null = null;
+  elapsedSeconds = 0;
+  timerId : any;
 
-  private loadingTimer?: number;
   private streamTimers: number[] = [];
-  private eventTimers: number[] = [];
+  private eventSource: EventSource | null = null;
 
-  constructor(private fb: FormBuilder,private blogService: BlogService) {
+  constructor(private fb: FormBuilder,private blogService: BlogService, private ngZone : NgZone) {
     this.blogGeneratorform = this.fb.group({
       topic: ['', [Validators.required, Validators.pattern(/\S+/)]]
     });
-  }
-
-  get activeLoadingMessage(): string {
-    return this.loadingMessages[Math.min(this.loadingStep, this.loadingMessages.length - 1)];
-  }
-
-  get planTasks(): PlanTask[] {
-    return this.plan?.tasks ?? [];
-  }
-
-  get activeEventIndex(): number {
-    return this.traceComplete ? -1 : this.visibleEvents.length - 1;
   }
 
   generateBlog(): void {
@@ -61,47 +40,51 @@ export class BlogGeneratorComponent implements OnDestroy {
       this.blogGeneratorform.markAllAsTouched();
       return;
     }
-    this.currentEvents = null;
-    this.traceComplete = false;
+
+    this.elapsedSeconds = 0;
+    this.timerId = setInterval(() => {
+      this.elapsedSeconds++;
+    }, 1000);
+
     const topic = this.blogGeneratorform.value.topic.trim();
     this.resetGeneration(topic);
     this.loading = true;
-    this.startLoadingProgress();
 
+    //generates new correlation id from frontend and passes to backend
     const correlationId = crypto.randomUUID();
-    const eventSource = this.blogService.connectToEvents(correlationId);
+    this.eventSource = this.blogService.connectToEvents(correlationId);
 
-    eventSource.onmessage = (event) => {
-      const data = JSON.parse(event.data);
+    this.eventSource.onmessage = (event) => {
+      const data = JSON.parse(event.data) as ProgressEvent | CompleteEvent;
 
       console.log('SSE Event', data);
-      // this.visibleEvents.push(data);
 
-      if(data.type === 'COMPLETE'){
-        this.isCompleted = true;
-        this.traceComplete = true;
-        eventSource.close;
+      this.ngZone.run(() => {
+        if ('type' in data && data.type === 'COMPLETE') {
 
-        return;
+          this.isCompleted = true;
+          this.closeEventSource();
+          clearInterval(this.timerId);
+          return;
       }
-      this.currentEvents = data;
-      
+      this.currentEvent = data as ProgressEvent;
+      });
     };
 
+    this.eventSource.onerror = () => {
+      this.closeEventSource();
+    };
 
-    this.progressEvents = [];
     this.blogService.generateBlog(topic, correlationId).subscribe({
       next: (response) => {
-        this.stopLoadingProgress();
         this.currentTopic = response.topic;
         this.plan = response.plan;
-        // this.events = response.events ?? [];
         this.loading = false;
-        // this.revealEvents(this.events);
+        this.qualityAssessment = response.quality_assessment ?? null;
         this.streamBlog(response.final);
       },
       error: () => {
-        this.stopLoadingProgress();
+        this.closeEventSource();
         this.loading = false;
         this.errorMessage = 'The workflow could not complete. Check that the backend is running and try again.';
       }
@@ -141,50 +124,23 @@ export class BlogGeneratorComponent implements OnDestroy {
     URL.revokeObjectURL(url);
   }
 
-  trackByTaskId(_: number, task: PlanTask): number {
-    return task.id;
-  }
-
-  trackByEventIndex(index: number): number {
-    return index;
-  }
-
   ngOnDestroy(): void {
-    this.stopLoadingProgress();
     this.clearStreamTimers();
-    this.clearEventTimers();
+    this.closeEventSource();
   }
 
   private resetGeneration(topic: string): void {
-    this.stopLoadingProgress();
     this.clearStreamTimers();
-    this.clearEventTimers();
+    this.closeEventSource();
     this.currentTopic = topic;
     this.plan = null;
-    this.events = [];
-    this.visibleEvents = [];
+    this.currentEvent = null;
     this.blogContentRaw = '';
     this.blogContent = '';
     this.errorMessage = '';
     this.copyLabel = 'Copy markdown';
     this.isStreamingComplete = false;
-    this.traceComplete = false;
-    this.loadingStep = 0;
-  }
-
-  private startLoadingProgress(): void {
-    this.loadingTimer = window.setInterval(() => {
-      if (this.loadingStep < this.loadingMessages.length - 1) {
-        this.loadingStep += 1;
-      }
-    }, 2000);
-  }
-
-  private stopLoadingProgress(): void {
-    if (this.loadingTimer !== undefined) {
-      window.clearInterval(this.loadingTimer);
-      this.loadingTimer = undefined;
-    }
+    this.isCompleted = false;
   }
 
   private streamBlog(content: string): void {
@@ -210,32 +166,11 @@ export class BlogGeneratorComponent implements OnDestroy {
     this.streamTimers = [];
   }
 
-  private revealEvents(events: ProgressEvent[]): void {
-    this.clearEventTimers();
-    this.visibleEvents = [];
-    this.traceComplete = false;
-
-    events.forEach((event, index) => {
-      const timer = window.setTimeout(() => {
-        this.visibleEvents = [...this.visibleEvents, event];
-        if (index === events.length - 1) {
-          const completeTimer = window.setTimeout(() => {
-            this.traceComplete = true;
-          }, 700);
-          this.eventTimers.push(completeTimer);
-        }
-      }, index * 650);
-      this.eventTimers.push(timer);
-    });
-
-    if (!events.length) {
-      this.traceComplete = true;
+  private closeEventSource(): void {
+    if (this.eventSource) {
+      this.eventSource.close();
+      this.eventSource = null;
     }
-  }
-
-  private clearEventTimers(): void {
-    this.eventTimers.forEach((timer) => window.clearTimeout(timer));
-    this.eventTimers = [];
   }
 
   private showCopySuccess(): void {

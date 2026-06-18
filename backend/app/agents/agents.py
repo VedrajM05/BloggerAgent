@@ -80,6 +80,30 @@ MODEL_OTHER = "phi3:medium"
 #endregion
 
 
+def emit_progress_event(
+    correlation_id: str | None,
+    agent: str,
+    message: str,
+    status: str = "completed",
+) -> ProgressEvent:
+    event = ProgressEvent(agent=agent, message=message, status=status)
+    if correlation_id:
+        publish_event(
+            correlation_id,
+            {
+                "agent": event.agent,
+                "message": event.message,
+                "status": event.status,
+            },
+        )
+    return event
+
+
+def emit_complete_event(correlation_id: str | None) -> None:
+    if correlation_id:
+        publish_event(correlation_id, {"type": "COMPLETE"})
+
+
 #region Data Cleaning
 
 def _truncate_text(text: str, limit: int = 1500) -> str:
@@ -251,7 +275,7 @@ def calculate_source_quality(result: dict) -> float:
             quality_score += 0.20
         if any(domain == d or domain.endswith("." + d) for d in penalize_domains):
             quality_score -= 0.30
-
+    
     return quality_score
 
 
@@ -701,23 +725,26 @@ def research_node(state: State) -> dict:
         f"[CID: {correlation_id}] | [NODE: research_node] | Starting web research | topic={topic!r}"
     )
 
+    emit_progress_event(
+        correlation_id=correlation_id,
+        agent="Research Agent",
+        message="Searching web sources...",
+        status="running"
+    )
+
+
     try:
         search_results = asyncio.run(tavily_search(topic, max_results=5))
     except (ReadTimeout, TimeoutException) as e:
         agent_logger.logger.exception(
             f"[CID: {correlation_id}] | [NODE: research_node] | Tavily search timed out: {e}"
         )
-        event = ProgressEvent(
+        event = emit_progress_event(
+            correlation_id=correlation_id,
             agent="Research Agent",
             message=f"Web research timed out for {topic}; no sources extracted",
             status="failed",
         )
-
-        publish_event(correlation_id, {
-            "agent": event.agent,
-            "message": event.message,
-            "status": event.status
-        })
 
         return {
             "research_context": "",
@@ -739,6 +766,13 @@ def research_node(state: State) -> dict:
         )
 
     results = (search_results or {}).get("results") or []
+
+    emit_progress_event(
+        correlation_id=correlation_id,
+        agent="Research Agent",
+        message=f"Found {len(results)} candidate sources",
+        status="running"
+    )
 
     agent_logger.logger.info(
         f"[CID: {correlation_id}] | [NODE: research_node] | Tavily search completed | results_count={len(results)}"
@@ -856,9 +890,10 @@ def research_node(state: State) -> dict:
         f"[CID: {correlation_id}] | [NODE: research_node] | research_context_full=\n{research_context}"
     )
 
-    event = ProgressEvent(
+    event = emit_progress_event(
+        correlation_id=correlation_id,
         agent="Research Agent",
-        message=f"Completed web research and extracted relevant sources for {topic}",
+        message="Completed web research",
         status="completed",
     )
     return {
@@ -875,7 +910,14 @@ def research_summarizer_node(state: State) -> dict:
     agent_logger.logger.info(
         f"[CID: {correlation_id}] | [NODE: research_summarizer] | Input research chars={len(research_context)}"
     )
-    
+    emit_progress_event(
+        correlation_id=correlation_id,
+        agent="Research Analyst Agent",
+        message="Analyzing research corpus...",
+        status="running"
+    )
+
+
     formatted_prompt = research_summarizer_prompt.format(research_context=research_context, topic = topic)
 
     raw_output = call_ollama(formatted_prompt, MODEL_OTHER)
@@ -922,19 +964,12 @@ def research_summarizer_node(state: State) -> dict:
             f"[CID: {correlation_id}] | [NODE: research_summarizer] | Failed to log summary stats: {e}"
         )
 
-    event = ProgressEvent(
+    event = emit_progress_event(
+        correlation_id=correlation_id,
         agent="Research Analyst Agent",
-        message=(
-            f"Extracted {len(summary.central_concepts)} central concepts and "
-            f"{len(summary.technical_details)} technical insights"
-        ),
+        message="Extracted research insights",
         status="completed",
     )
-    publish_event(correlation_id, {
-            "agent": event.agent,
-            "message": event.message,
-            "status": event.status
-        })
 
     return {"research_summary": summary, "progress_events": [event]}
 
@@ -984,6 +1019,13 @@ def orchestrator(state : State) -> dict:
     # print("formatted_prompt  completed")
     #agent_logger.log_prompt(node_name="orchestrator", correlationId= state.get("correlationId"), prompt=formatted_prompt)
     #plan = llm.with_structured_output(Plan).invoke(formatted_prompt)
+    emit_progress_event(
+        correlation_id=state.get("correlationId"),
+        agent="Planning Agent",
+        message="Creating article outline...",
+        status="running"
+    )
+
     raw_output = call_ollama(formatted_prompt, MODEL_OTHER)
     # print("call ollama  completed")
     plan = parse_structured_output(raw_output, Plan)
@@ -1000,16 +1042,12 @@ def orchestrator(state : State) -> dict:
             f"[CID: {state.get('correlationId')}] | [NODE: orchestrator] | Failed to log plan stats: {e}"
         )
 
-    event = ProgressEvent(
+    event = emit_progress_event(
+        correlation_id=state.get("correlationId"),
         agent="Planning Agent",
-        message=f"Created {len(plan.tasks)} specialized writing tasks",
+        message="Created writing plan",
         status="completed",
     )
-    publish_event(state.get('correlationId'), {
-            "agent": event.agent,
-            "message": event.message,
-            "status": event.status
-        })
 
     return {"plan" : plan, "progress_events": [event]}
 
@@ -1114,6 +1152,14 @@ def worker(payload : dict) -> dict:
     # log_prompt creating too much prompts in log file
     agent_logger.log_prompt(node_name="worker", correlationId= correlationId, prompt=formatted_prompt)
     #raw_output = call_ollama(formatted_prompt)
+    emit_progress_event(
+        correlation_id=correlationId,
+        agent="Writer Agent",
+        message=f"Writing: {task_title}",
+        status="running"
+    )
+
+
     section_md = call_ollama_text(formatted_prompt, MODEL_OTHER) #llm.invoke(formatted_prompt).content.strip()
 
     agent_logger.logger.info(
@@ -1152,16 +1198,12 @@ def worker(payload : dict) -> dict:
         f"[CID: {correlationId}] | [NODE: worker] | generated_section_preview={_truncate_text(section_md or '', limit=300)}"
     )
     # print("sections : ",section_md)
-    post_event = ProgressEvent(
+    post_event = emit_progress_event(
+        correlation_id=correlationId,
         agent="Writer Agent",
-        message=f"Generated section: {getattr(task, 'title', '')}",
+        message=f"Writing: {getattr(task, 'title', '') or 'Untitled Section'}",
         status="completed",
     )
-    publish_event(correlationId, {
-            "agent": post_event.agent,
-            "message": post_event.message,
-            "status": post_event.status
-        })
 
     return {"sections": [section_md], "progress_events": [post_event]}
 
@@ -1175,16 +1217,12 @@ def edit_blog(topic : str, blog_content: str, correlationId : str)-> str:
 
     edited_blog = call_gemini_text(formatted_prompt)
     #edited_blog = call_ollama_text(formatted_prompt, MODEL_JUDGE)
-    event = ProgressEvent(
+    event = emit_progress_event(
+        correlation_id=correlationId,
         agent="Editor Agent",
-        message="Editing all sections into final article",
+        message="Editing final article",
         status="completed",
     )
-    publish_event(correlationId, {
-            "agent": event.agent,
-            "message": event.message,
-            "status": event.status
-        })
     return edited_blog.strip()
 
 def reducer(state : State) -> dict:
@@ -1197,6 +1235,13 @@ def reducer(state : State) -> dict:
     ]
 
     body = "\n\n".join(cleaned_sections).strip()
+
+    emit_progress_event(
+        correlation_id=state.get("correlationId"),
+        agent="Editor Agent",
+        message="Polishing article...",
+        status="running"
+    )
 
     edited_blog = edit_blog(topic=state["topic"],blog_content=body, correlationId = state.get('correlationId'))
 
@@ -1217,16 +1262,12 @@ def reducer(state : State) -> dict:
         f"path={str(output_path)}"
     )
 
-    event = ProgressEvent(
+    event = emit_progress_event(
+        correlation_id=state.get("correlationId"),
         agent="Reducer Agent",
-        message="Creating markdown file of final article",
+        message="Creating final markdown",
         status="completed",
     )
-    publish_event(state.get('correlationId'), {
-            "agent": event.agent,
-            "message": event.message,
-            "status": event.status
-        })
 
     return {"final": final_blog, "progress_events": [event]}
 
@@ -1278,18 +1319,12 @@ def judge(state : State) -> dict:
 
     quality_assessment = review_and_judge_blog(topic=topic, blog_content=blog_content)
 
-    progress_events = ProgressEvent(
+    progress_events = emit_progress_event(
+        correlation_id=state.get("correlationId"),
         agent="Judge Agent",
-        message=f"GPT Judge judging through pre-determined parameters, overall score {quality_assessment.overall_score}/10",
+        message="Evaluating article quality",
         status="completed"
     )
-    
-    publish_event(state.get('correlationId'), {
-            "agent": progress_events.agent,
-            "message": progress_events.message,
-            "status": progress_events.status,
-            "type":"COMPLETE"
-        })
     return {"quality_assessment" : quality_assessment, "progress_events" : [progress_events] }
 
 
@@ -1322,7 +1357,9 @@ workflow = g.compile()
 
 # Required for FastAPI 
 def run_blog_writer(topic : str, correlationId : str):
-    return workflow.invoke({"topic" : topic, "correlationId" : correlationId})
+    result = workflow.invoke({"topic" : topic, "correlationId" : correlationId})
+    emit_complete_event(correlationId)
+    return result
 
 
 # External API calls 
@@ -1410,7 +1447,7 @@ async def tavily_extract(urls: list[str]) -> dict[str, str]:
 
     return extracted
      
-def review_and_judge_blog(topic : str, blog_content : str, provider : str = "ollama") -> QualityAssessment:
+def review_and_judge_blog(topic : str, blog_content : str, provider : str = "openai") -> QualityAssessment:
     
     formatted_prompt = judge_prompt.format(blog_content=blog_content, topic = topic)
     if provider == "ollama":
